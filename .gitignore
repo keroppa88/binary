@@ -1,0 +1,10 @@
+# Build artifacts
+smb_clean.asm
+smb_build.asm
+*.lst
+*.nl
+*.cdl
+*.mlb
+
+# ROM output (contains assembled code, needs CHR-ROM to be playable)
+*.nes

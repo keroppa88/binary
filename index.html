@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super Mario Bros. - Browser NES Emulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      user-select: none;
+    }
+
+    h1 {
+      color: #e63946;
+      font-size: 1.6em;
+      margin-bottom: 12px;
+      text-shadow: 2px 2px 0 #000;
+      letter-spacing: 2px;
+    }
+
+    #screen-container {
+      position: relative;
+      border: 4px solid #333;
+      border-radius: 4px;
+      background: #000;
+      line-height: 0;
+    }
+
+    #nes-screen {
+      width: 512px;
+      height: 480px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #000;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      font-size: 1em;
+      text-align: center;
+      padding: 30px;
+      cursor: pointer;
+    }
+
+    .overlay p { margin: 8px 0; }
+    .overlay .hint { color: #888; font-size: 0.85em; }
+
+    .btn {
+      display: inline-block;
+      background: #e63946;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      font-size: 1em;
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+    .btn:hover { background: #c62828; }
+
+    #rom-input { display: none; }
+
+    #status-bar {
+      margin-top: 8px;
+      font-size: 0.85em;
+      color: #666;
+      text-align: center;
+    }
+
+    #gamepad-status {
+      color: #4caf50;
+      font-size: 0.85em;
+      margin-top: 4px;
+    }
+
+    .toolbar {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+    }
+    .toolbar button {
+      background: #333;
+      color: #ccc;
+      border: 1px solid #555;
+      padding: 6px 14px;
+      font-family: inherit;
+      font-size: 0.85em;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    .toolbar button:hover { background: #444; }
+    .toolbar button.active { background: #e63946; border-color: #e63946; color: #fff; }
+
+    .info-section {
+      margin-top: 20px;
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .info-section h3 {
+      color: #e63946;
+      font-size: 1em;
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+
+    table.key-map {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85em;
+    }
+    table.key-map th,
+    table.key-map td {
+      padding: 4px 10px;
+      text-align: left;
+      border-bottom: 1px solid #222;
+    }
+    table.key-map th { color: #e63946; }
+    table.key-map td:first-child { color: #aaa; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 560px) {
+      #nes-screen { width: 100%; height: auto; }
+      h1 { font-size: 1.2em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>SUPER MARIO BROS.</h1>
+
+  <div id="screen-container">
+    <canvas id="nes-screen" width="256" height="240"></canvas>
+    <div id="overlay" class="overlay" onclick="document.getElementById('rom-input').click()">
+      <div>
+        <p style="font-size:1.2em;">NES ROM (.nes)</p>
+        <p>ファイルをドラッグ＆ドロップ</p>
+        <p class="hint">または クリックしてファイルを選択</p>
+        <button class="btn" onclick="event.stopPropagation(); document.getElementById('rom-input').click()">
+          ファイルを選択
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="rom-input" accept=".nes">
+
+  <div class="toolbar">
+    <button id="btn-reset" class="hidden" onclick="resetNES()">リセット</button>
+    <button id="btn-pause" class="hidden" onclick="togglePause()">一時停止</button>
+    <button id="btn-mute" onclick="toggleMute()">音声: ON</button>
+    <button id="btn-fullscreen" onclick="toggleFullscreen()">フルスクリーン</button>
+  </div>
+
+  <div id="status-bar">ROMファイルを読み込んでください</div>
+  <div id="gamepad-status"></div>
+
+  <div class="info-section">
+    <h3>キーボード操作</h3>
+    <table class="key-map">
+      <tr><th>NESボタン</th><th>キー</th></tr>
+      <tr><td>十字キー (上下左右)</td><td>矢印キー / W A S D</td></tr>
+      <tr><td>Aボタン (ジャンプ)</td><td>X / K</td></tr>
+      <tr><td>Bボタン (ダッシュ)</td><td>Z / J</td></tr>
+      <tr><td>スタート</td><td>Enter</td></tr>
+      <tr><td>セレクト</td><td>Shift (右)</td></tr>
+    </table>
+
+    <h3>ゲームコントローラー</h3>
+    <table class="key-map">
+      <tr><th>NESボタン</th><th>コントローラー</th></tr>
+      <tr><td>十字キー</td><td>D-Pad / 左スティック</td></tr>
+      <tr><td>Aボタン (ジャンプ)</td><td>A / X (下ボタン)</td></tr>
+      <tr><td>Bボタン (ダッシュ)</td><td>B / Circle / X / Square (右・左ボタン)</td></tr>
+      <tr><td>スタート</td><td>Start / Options</td></tr>
+      <tr><td>セレクト</td><td>Back / Share</td></tr>
+    </table>
+  </div>
+
+  <script src="https://unpkg.com/jsnes@1.2.1/dist/jsnes.min.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    // =========================================================================
+    // DOM elements
+    // =========================================================================
+    const canvas = document.getElementById('nes-screen');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const romInput = document.getElementById('rom-input');
+    const statusBar = document.getElementById('status-bar');
+    const gamepadStatus = document.getElementById('gamepad-status');
+    const btnReset = document.getElementById('btn-reset');
+    const btnPause = document.getElementById('btn-pause');
+    const btnMute = document.getElementById('btn-mute');
+
+    // =========================================================================
+    // State
+    // =========================================================================
+    let nes = null;
+    let romLoaded = false;
+    let paused = false;
+    let muted = false;
+    let animFrameId = null;
+
+    // Frame buffer: ImageData for rendering
+    const imageData = ctx.createImageData(256, 240);
+    const frameBuf32 = new Uint32Array(imageData.data.buffer);
+
+    // =========================================================================
+    // Audio setup (Web Audio API)
+    // =========================================================================
+    let audioCtx = null;
+    let scriptNode = null;
+    const AUDIO_BUFFER_SIZE = 8192;
+    const audioRingBuf = new Float32Array(AUDIO_BUFFER_SIZE * 2);
+    let audioWritePos = 0;
+    let audioReadPos = 0;
+
+    function audioBufferLength() {
+      if (audioWritePos >= audioReadPos) return audioWritePos - audioReadPos;
+      return AUDIO_BUFFER_SIZE * 2 - audioReadPos + audioWritePos;
+    }
+
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 44100
+        });
+        // Use 2048 buffer for low latency
+        scriptNode = audioCtx.createScriptProcessor(2048, 0, 2);
+        scriptNode.onaudioprocess = function(e) {
+          const left = e.outputBuffer.getChannelData(0);
+          const right = e.outputBuffer.getChannelData(1);
+          const len = left.length;
+          for (let i = 0; i < len; i++) {
+            if (audioBufferLength() >= 2) {
+              left[i] = muted ? 0 : audioRingBuf[audioReadPos];
+              audioReadPos = (audioReadPos + 1) % (AUDIO_BUFFER_SIZE * 2);
+              right[i] = muted ? 0 : audioRingBuf[audioReadPos];
+              audioReadPos = (audioReadPos + 1) % (AUDIO_BUFFER_SIZE * 2);
+            } else {
+              left[i] = 0;
+              right[i] = 0;
+            }
+          }
+        };
+        scriptNode.connect(audioCtx.destination);
+      } catch (e) {
+        console.warn('Web Audio not available:', e);
+      }
+    }
+
+    function onAudioSample(left, right) {
+      if (!audioCtx) return;
+      audioRingBuf[audioWritePos] = left;
+      audioWritePos = (audioWritePos + 1) % (AUDIO_BUFFER_SIZE * 2);
+      audioRingBuf[audioWritePos] = right;
+      audioWritePos = (audioWritePos + 1) % (AUDIO_BUFFER_SIZE * 2);
+    }
+
+    // =========================================================================
+    // NES Emulator
+    // =========================================================================
+    function createNES() {
+      nes = new jsnes.NES({
+        onFrame: onFrame,
+        onAudioSample: onAudioSample,
+        sampleRate: 44100
+      });
+    }
+
+    function onFrame(frameBuffer) {
+      // frameBuffer: array of length 256*240, each element is 0xRRGGBB
+      for (let i = 0; i < 256 * 240; i++) {
+        const pixel = frameBuffer[i];
+        // pixel = 0xRRGGBB -> Uint32 little-endian ABGR
+        frameBuf32[i] = 0xFF000000 |
+          ((pixel & 0xFF) << 16) |
+          (pixel & 0xFF00) |
+          ((pixel >> 16) & 0xFF);
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // =========================================================================
+    // ROM Loading
+    // =========================================================================
+    function loadROM(arrayBuffer) {
+      initAudio();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      try {
+        if (!nes) createNES();
+
+        // Convert ArrayBuffer to binary string for jsnes
+        const data = new Uint8Array(arrayBuffer);
+        let romStr = '';
+        for (let i = 0; i < data.length; i++) {
+          romStr += String.fromCharCode(data[i]);
+        }
+
+        nes.loadROM(romStr);
+        romLoaded = true;
+
+        overlay.classList.add('hidden');
+        btnReset.classList.remove('hidden');
+        btnPause.classList.remove('hidden');
+        statusBar.textContent = '実行中';
+        paused = false;
+
+        // Reset audio buffer
+        audioWritePos = 0;
+        audioReadPos = 0;
+
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        emulationLoop();
+      } catch (e) {
+        statusBar.textContent = 'エラー: ' + e.message;
+        console.error('ROM load error:', e);
+      }
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      statusBar.textContent = '読み込み中: ' + file.name;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        loadROM(e.target.result);
+      };
+      reader.onerror = function() {
+        statusBar.textContent = 'ファイル読み込みエラー';
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // File input change
+    romInput.addEventListener('change', function(e) {
+      handleFile(e.target.files[0]);
+    });
+
+    // Drag and drop
+    const screenContainer = document.getElementById('screen-container');
+    screenContainer.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      overlay.style.borderColor = '#e63946';
+    });
+    screenContainer.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      overlay.style.borderColor = '';
+    });
+    screenContainer.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      overlay.style.borderColor = '';
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+
+    // Also allow drop on the whole document body
+    document.body.addEventListener('dragover', function(e) { e.preventDefault(); });
+    document.body.addEventListener('drop', function(e) {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+
+    // =========================================================================
+    // Emulation loop
+    // =========================================================================
+    function emulationLoop() {
+      if (!romLoaded || paused) return;
+      try {
+        nes.frame();
+      } catch (e) {
+        console.error('Emulation error:', e);
+        statusBar.textContent = 'エミュレーションエラー';
+        return;
+      }
+      animFrameId = requestAnimationFrame(emulationLoop);
+    }
+
+    // =========================================================================
+    // Controls: Keyboard
+    // =========================================================================
+    // Key mapping: keyboard key -> [player, NES button]
+    const KEYBOARD_MAP = {
+      // Arrow keys
+      'ArrowUp':     [1, jsnes.Controller.BUTTON_UP],
+      'ArrowDown':   [1, jsnes.Controller.BUTTON_DOWN],
+      'ArrowLeft':   [1, jsnes.Controller.BUTTON_LEFT],
+      'ArrowRight':  [1, jsnes.Controller.BUTTON_RIGHT],
+      // WASD
+      'KeyW':        [1, jsnes.Controller.BUTTON_UP],
+      'KeyS':        [1, jsnes.Controller.BUTTON_DOWN],
+      'KeyA':        [1, jsnes.Controller.BUTTON_LEFT],
+      'KeyD':        [1, jsnes.Controller.BUTTON_RIGHT],
+      // A button (jump) - X, K
+      'KeyX':        [1, jsnes.Controller.BUTTON_A],
+      'KeyK':        [1, jsnes.Controller.BUTTON_A],
+      // B button (run/fire) - Z, J
+      'KeyZ':        [1, jsnes.Controller.BUTTON_B],
+      'KeyJ':        [1, jsnes.Controller.BUTTON_B],
+      // Start - Enter
+      'Enter':       [1, jsnes.Controller.BUTTON_START],
+      // Select - Right Shift
+      'ShiftRight':  [1, jsnes.Controller.BUTTON_SELECT],
+    };
+
+    document.addEventListener('keydown', function(e) {
+      if (!nes || !romLoaded) return;
+      const mapping = KEYBOARD_MAP[e.code];
+      if (mapping) {
+        nes.buttonDown(mapping[0], mapping[1]);
+        e.preventDefault();
+      }
+    });
+
+    document.addEventListener('keyup', function(e) {
+      if (!nes || !romLoaded) return;
+      const mapping = KEYBOARD_MAP[e.code];
+      if (mapping) {
+        nes.buttonUp(mapping[0], mapping[1]);
+        e.preventDefault();
+      }
+    });
+
+    // =========================================================================
+    // Controls: Gamepad API
+    // =========================================================================
+    const GAMEPAD_DEADZONE = 0.4;
+
+    // Track previous gamepad state to detect press/release
+    const gpState = {
+      buttons: {},
+      axes: { up: false, down: false, left: false, right: false }
+    };
+
+    function pollGamepad() {
+      if (!nes || !romLoaded) {
+        requestAnimationFrame(pollGamepad);
+        return;
+      }
+
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gpConnected = false;
+
+      for (let gi = 0; gi < gamepads.length; gi++) {
+        const gp = gamepads[gi];
+        if (!gp || !gp.connected) continue;
+        gpConnected = true;
+
+        // Only handle first connected gamepad for player 1
+        const player = 1;
+
+        // Button mapping (Standard Gamepad layout)
+        // buttons[0] = A/X (bottom)    -> NES A (jump)
+        // buttons[1] = B/Circle (right) -> NES B (run)
+        // buttons[2] = X/Square (left)  -> NES B (run, alt)
+        // buttons[3] = Y/Triangle (top) -> NES A (jump, alt)
+        // buttons[8] = Back/Select      -> NES Select
+        // buttons[9] = Start            -> NES Start
+        // buttons[12] = D-Up
+        // buttons[13] = D-Down
+        // buttons[14] = D-Left
+        // buttons[15] = D-Right
+        const btnMap = [
+          [0, jsnes.Controller.BUTTON_A],
+          [1, jsnes.Controller.BUTTON_B],
+          [2, jsnes.Controller.BUTTON_B],
+          [3, jsnes.Controller.BUTTON_A],
+          [8, jsnes.Controller.BUTTON_SELECT],
+          [9, jsnes.Controller.BUTTON_START],
+          [12, jsnes.Controller.BUTTON_UP],
+          [13, jsnes.Controller.BUTTON_DOWN],
+          [14, jsnes.Controller.BUTTON_LEFT],
+          [15, jsnes.Controller.BUTTON_RIGHT],
+        ];
+
+        for (const [btnIdx, nesBtn] of btnMap) {
+          if (btnIdx >= gp.buttons.length) continue;
+          const pressed = gp.buttons[btnIdx].pressed;
+          const key = gi + '_' + btnIdx;
+          if (pressed && !gpState.buttons[key]) {
+            nes.buttonDown(player, nesBtn);
+          } else if (!pressed && gpState.buttons[key]) {
+            nes.buttonUp(player, nesBtn);
+          }
+          gpState.buttons[key] = pressed;
+        }
+
+        // Left stick -> D-pad
+        if (gp.axes.length >= 2) {
+          const lx = gp.axes[0];
+          const ly = gp.axes[1];
+
+          const left = lx < -GAMEPAD_DEADZONE;
+          const right = lx > GAMEPAD_DEADZONE;
+          const up = ly < -GAMEPAD_DEADZONE;
+          const down = ly > GAMEPAD_DEADZONE;
+
+          if (left && !gpState.axes.left) nes.buttonDown(player, jsnes.Controller.BUTTON_LEFT);
+          if (!left && gpState.axes.left) nes.buttonUp(player, jsnes.Controller.BUTTON_LEFT);
+          if (right && !gpState.axes.right) nes.buttonDown(player, jsnes.Controller.BUTTON_RIGHT);
+          if (!right && gpState.axes.right) nes.buttonUp(player, jsnes.Controller.BUTTON_RIGHT);
+          if (up && !gpState.axes.up) nes.buttonDown(player, jsnes.Controller.BUTTON_UP);
+          if (!up && gpState.axes.up) nes.buttonUp(player, jsnes.Controller.BUTTON_UP);
+          if (down && !gpState.axes.down) nes.buttonDown(player, jsnes.Controller.BUTTON_DOWN);
+          if (!down && gpState.axes.down) nes.buttonUp(player, jsnes.Controller.BUTTON_DOWN);
+
+          gpState.axes.left = left;
+          gpState.axes.right = right;
+          gpState.axes.up = up;
+          gpState.axes.down = down;
+        }
+
+        break; // Only use first gamepad
+      }
+
+      if (gpConnected) {
+        gamepadStatus.textContent = 'コントローラー接続済み';
+      }
+
+      requestAnimationFrame(pollGamepad);
+    }
+
+    // Gamepad connection events
+    window.addEventListener('gamepadconnected', function(e) {
+      gamepadStatus.textContent = 'コントローラー接続: ' + e.gamepad.id;
+    });
+    window.addEventListener('gamepaddisconnected', function(e) {
+      gamepadStatus.textContent = 'コントローラー切断';
+      // Clear button state
+      gpState.buttons = {};
+      gpState.axes = { up: false, down: false, left: false, right: false };
+    });
+
+    // Start gamepad polling
+    requestAnimationFrame(pollGamepad);
+
+    // =========================================================================
+    // Toolbar functions
+    // =========================================================================
+    window.resetNES = function() {
+      if (!nes || !romLoaded) return;
+      // Reset by reloading the ROM triggers a fresh start
+      nes.reset();
+      audioWritePos = 0;
+      audioReadPos = 0;
+      if (paused) {
+        paused = false;
+        btnPause.textContent = '一時停止';
+        statusBar.textContent = '実行中';
+        emulationLoop();
+      }
+    };
+
+    window.togglePause = function() {
+      if (!romLoaded) return;
+      paused = !paused;
+      if (paused) {
+        btnPause.textContent = '再開';
+        statusBar.textContent = '一時停止中';
+        if (animFrameId) {
+          cancelAnimationFrame(animFrameId);
+          animFrameId = null;
+        }
+      } else {
+        btnPause.textContent = '一時停止';
+        statusBar.textContent = '実行中';
+        emulationLoop();
+      }
+    };
+
+    window.toggleMute = function() {
+      muted = !muted;
+      btnMute.textContent = muted ? '音声: OFF' : '音声: ON';
+    };
+
+    window.toggleFullscreen = function() {
+      const container = document.getElementById('screen-container');
+      if (!document.fullscreenElement) {
+        (container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen).call(container);
+      } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
+      }
+    };
+
+    // Handle fullscreen canvas sizing
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+    function onFullscreenChange() {
+      if (document.fullscreenElement) {
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        canvas.style.objectFit = 'contain';
+      } else {
+        canvas.style.width = '512px';
+        canvas.style.height = '480px';
+        canvas.style.objectFit = '';
+      }
+    }
+
+    // =========================================================================
+    // Initialize
+    // =========================================================================
+    createNES();
+
+    // Draw initial black screen
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 256, 240);
+
+    // Try to auto-load smb.nes from same directory (works when served via HTTP)
+    function tryAutoLoad() {
+      if (window.location.protocol === 'file:') return; // Can't fetch on file://
+      statusBar.textContent = 'smb.nes を自動読み込み中...';
+      fetch('smb.nes')
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('not found');
+          return resp.arrayBuffer();
+        })
+        .then(function(buf) { loadROM(buf); })
+        .catch(function() {
+          statusBar.textContent = 'ROMファイルを読み込んでください';
+        });
+    }
+    tryAutoLoad();
+
+  })();
+  </script>
+</body>
+</html>
