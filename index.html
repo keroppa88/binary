@@ -1066,7 +1066,7 @@
       const samplesPerSymbol = Math.round(config.sampleRate * symbolDurSec);
       const totalSamples = symbols.length * samplesPerSymbol;
       const buf = new Float32Array(totalSamples);
-      const vol = config.volume;
+      const vol = 1.0;
       const rampSamples = Math.min(Math.round(samplesPerSymbol * 0.05), 20);
 
       for (let si = 0; si < symbols.length; si++) {
@@ -1129,7 +1129,7 @@
       // Generate audio
       setStep('audio');
       const freq = config.baseFreq;
-      const vol = config.volume;
+      const vol = 1.0;
       const ditDur = config.symbolDur / 1000;  // dit duration in seconds
       const dahDur = ditDur * 3;
       const elementGap = ditDur;     // gap between dits/dahs within a character
@@ -1260,7 +1260,7 @@
       // Generate audio (same timing as standard Morse)
       setStep('audio');
       const freq = config.baseFreq;
-      const vol = config.volume;
+      const vol = 1.0;
       const ditDur = config.symbolDur / 1000;
       const dahDur = ditDur * 3;
       const elementGap = ditDur;
@@ -1349,7 +1349,7 @@
       const toneDur = config.symbolDur / 1000;       // duration of each chord tone
       const intraGap = toneDur * 0.3;                 // gap between two chords of a pair
       const interGap = toneDur * 0.8;                 // gap between character pairs
-      const vol = config.volume;
+      const vol = 1.0;
       const sr = config.sampleRate;
       const rampMs = 0.003;
       const rampSamples = Math.round(rampMs * sr);
