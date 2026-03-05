@@ -285,8 +285,7 @@
           <input type="file" id="csv-input" accept=".csv,.txt">
         </div>
         <button onclick="loadDefaultCSV()" class="secondary">a.csv を読込</button>
-        <button id="btn-to-romaji" onclick="convertToRomaji()" class="secondary">漢字→ローマ字</button>
-        <button id="btn-to-katakana" onclick="convertToKatakana()" class="secondary">漢字→カタカナ</button>
+        <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">漢字→ローマ字</button>
       </div>
       <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
     </div>
@@ -485,9 +484,16 @@
       return result.trim();
     }
 
-    async function convertToRomaji() {
+    // サイクル状態: 'original' → 'romaji' → 'katakana' → 'original' → ...
+    let _cycleState = 'original';
+    let _originalText = null;
+
+    async function cycleKanaRomaji() {
+      const ta = document.getElementById('input-text');
+      const btn = document.getElementById('btn-cycle-kana');
+
+      // kuroshiro 初期化待機（必要な場合）
       if (!kuroshiroReady && !kuroshiroFailed) {
-        const btn = document.getElementById('btn-to-romaji');
         btn.disabled = true;
         btn.textContent = '読込中...';
         const timeout = new Promise((_, reject) =>
@@ -499,64 +505,51 @@
           // タイムアウト → フォールバックで続行
         } finally {
           btn.disabled = false;
+        }
+      }
+
+      btn.disabled = true;
+      btn.textContent = '変換中...';
+
+      try {
+        if (_cycleState === 'original') {
+          // 元文 → ローマ字
+          _originalText = ta.value;
+          if (kuroshiroReady) {
+            ta.value = await kuroshiroInst.convert(ta.value, { to: 'romaji', mode: 'spaced', romajiSystem: 'hepburn' });
+          } else {
+            ta.value = kanaToRomajiSimple(ta.value);
+          }
+          _cycleState = 'romaji';
+          btn.textContent = 'ローマ字→カタカナ';
+        } else if (_cycleState === 'romaji') {
+          // ローマ字 → カタカナ（元文から再変換）
+          if (kuroshiroReady) {
+            ta.value = await kuroshiroInst.convert(_originalText, { to: 'katakana', mode: 'normal' });
+          } else {
+            alert('カタカナ変換にはkuroshiro辞書が必要です。');
+            btn.textContent = 'ローマ字→カタカナ';
+            return;
+          }
+          _cycleState = 'katakana';
+          btn.textContent = 'カタカナ→元に戻す';
+        } else {
+          // カタカナ → 元文
+          ta.value = _originalText;
+          _originalText = null;
+          _cycleState = 'original';
+          btn.textContent = '漢字→ローマ字';
+        }
+      } catch(e) {
+        alert('変換に失敗しました: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        if (_cycleState === 'original' && btn.textContent === '変換中...') {
           btn.textContent = '漢字→ローマ字';
         }
       }
-
-      const ta = document.getElementById('input-text');
-      const btn = document.getElementById('btn-to-romaji');
-      btn.disabled = true;
-      btn.textContent = '変換中...';
-      try {
-        if (kuroshiroReady) {
-          ta.value = await kuroshiroInst.convert(ta.value, { to: 'romaji', mode: 'spaced', romajiSystem: 'hepburn' });
-        } else {
-          // Kuroshiro 未使用フォールバック（かな/カタカナのみ対応、漢字は変換されない）
-          ta.value = kanaToRomajiSimple(ta.value);
-        }
-      } catch(e) {
-        alert('ローマ字変換に失敗しました: ' + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '漢字→ローマ字';
-      }
     }
-    window.convertToRomaji = convertToRomaji;
-
-    async function convertToKatakana() {
-      const btn = document.getElementById('btn-to-katakana');
-      if (!kuroshiroReady && !kuroshiroFailed) {
-        btn.disabled = true;
-        btn.textContent = '読込中...';
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 15000)
-        );
-        try {
-          await Promise.race([kuroshiroInitPromise, timeout]);
-        } catch(e) {}
-        finally {
-          btn.disabled = false;
-          btn.textContent = '漢字→カタカナ';
-        }
-      }
-
-      const ta = document.getElementById('input-text');
-      btn.disabled = true;
-      btn.textContent = '変換中...';
-      try {
-        if (kuroshiroReady) {
-          ta.value = await kuroshiroInst.convert(ta.value, { to: 'katakana', mode: 'normal' });
-        } else {
-          alert('カタカナ変換にはkuroshiro辞書が必要です。読込を待つか、ページを再読込してください。');
-        }
-      } catch(e) {
-        alert('カタカナ変換に失敗しました: ' + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '漢字→カタカナ';
-      }
-    }
-    window.convertToKatakana = convertToKatakana;
+    window.cycleKanaRomaji = cycleKanaRomaji;
 
     // =========================================================================
     // Configuration
