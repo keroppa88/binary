@@ -256,7 +256,7 @@
 
     .mode-desc {
       font-size: 0.75em;
-      color: #666;
+      color: #9ab;
       margin-bottom: 8px;
       padding: 6px 8px;
       background: #0a0a1a;
@@ -305,7 +305,6 @@
       <h2>再生コントロール</h2>
       <div class="btn-row">
         <button id="btn-encode" onclick="encode()">エンコード</button>
-        <span id="kanji-status" style="font-size:0.75em;color:#888;">漢字変換: 読込中...</span>
         <button id="btn-play" onclick="play()" disabled>再生 ▶</button>
         <button id="btn-stop" onclick="stop()" class="stop" disabled>停止 ■</button>
         <button id="btn-download" onclick="downloadWav()" class="secondary" disabled>WAVダウンロード</button>
@@ -784,6 +783,7 @@
     let audioBuffer = null;
     let audioCtx    = null;
     let sourceNode  = null;
+    let gainNode    = null;
     let isPlaying   = false;
     let animId      = null;
     let analyser    = null;
@@ -964,6 +964,9 @@
     updateSymbolTable();
     document.getElementById('set-base-freq').addEventListener('input', updateSymbolTable);
     document.getElementById('set-freq-step').addEventListener('input', updateSymbolTable);
+    document.getElementById('set-volume').addEventListener('input', function() {
+      if (gainNode) gainNode.gain.value = config.volume;
+    });
 
     // =========================================================================
     // Data inspector toggle
@@ -1536,10 +1539,14 @@
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 2048;
 
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = config.volume;
+
       sourceNode = audioCtx.createBufferSource();
       sourceNode.buffer = buffer;
       sourceNode.connect(analyser);
-      analyser.connect(audioCtx.destination);
+      analyser.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
 
       sourceNode.onended = function() {
         isPlaying = false;
