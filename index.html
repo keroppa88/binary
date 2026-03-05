@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>テキスト→音声変調</title>
+  <script src="vendor/kuroshiro.min.js"></script>
+  <script src="vendor/kuroshiro-analyzer-kuromoji.min.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a1a;
+      color: #d0d0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      color: #00e5ff;
+      font-size: 1.4em;
+      margin-bottom: 6px;
+      text-shadow: 0 0 10px rgba(0,229,255,0.4);
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.8em;
+      margin-bottom: 16px;
+    }
+    .container {
+      max-width: 800px;
+      width: 100%;
+    }
+    .panel {
+      background: #12122a;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .panel h2 {
+      color: #00e5ff;
+      font-size: 1em;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #2a2a4a;
+      padding-bottom: 6px;
+    }
+    label {
+      display: block;
+      color: #888;
+      font-size: 0.8em;
+      margin-bottom: 4px;
+    }
+    textarea {
+      width: 100%;
+      height: 80px;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      border: 1px solid #3a3a5a;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: inherit;
+      font-size: 0.9em;
+      resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: #00e5ff; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #00e5ff;
+      color: #000;
+      border: none;
+      padding: 8px 18px;
+      font-family: inherit;
+      font-size: 0.85em;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    button:hover { background: #00b8d4; }
+    button:disabled { background: #333; color: #666; cursor: default; }
+    button.secondary {
+      background: #2a2a4a;
+      color: #aaa;
+    }
+    button.secondary:hover { background: #3a3a5a; }
+    button.stop { background: #e63946; color: #fff; }
+    button.stop:hover { background: #c62828; }
+    .file-input-wrapper {
+      display: inline-block;
+    }
+    .file-input-wrapper input[type="file"] { display: none; }
+
+    /* Pipeline visualization */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+      font-size: 0.75em;
+    }
+    .pipe-step {
+      background: #1a1a3a;
+      border: 1px solid #3a3a5a;
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: #888;
+      transition: all 0.3s;
+    }
+    .pipe-step.active {
+      border-color: #00e5ff;
+      color: #00e5ff;
+      box-shadow: 0 0 6px rgba(0,229,255,0.3);
+    }
+    .pipe-step.done {
+      border-color: #4caf50;
+      color: #4caf50;
+    }
+    .pipe-arrow { color: #444; }
+
+    /* Data display */
+    .data-display {
+      background: #0a0a1a;
+      border: 1px solid #2a2a4a;
+      border-radius: 4px;
+      padding: 8px;
+      font-size: 0.75em;
+      max-height: 120px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+      margin-top: 6px;
+    }
+    .hex { color: #ffab40; }
+    .bits { color: #76ff03; }
+    .frame-info { color: #e040fb; }
+    .freq-info { color: #00e5ff; }
+    .morse-info { color: #ff6e40; }
+
+    /* Waveform canvas */
+    #waveform {
+      width: 100%;
+      height: 100px;
+      background: #0a0a1a;
+      border: 1px solid #2a2a4a;
+      border-radius: 4px;
+    }
+
+    /* Spectrum display */
+    #spectrum {
+      width: 100%;
+      height: 80px;
+      background: #0a0a1a;
+      border: 1px solid #2a2a4a;
+      border-radius: 4px;
+      margin-top: 6px;
+    }
+
+    /* Settings */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .setting-item input, .setting-item select {
+      background: #0a0a1a;
+      color: #e0e0e0;
+      border: 1px solid #3a3a5a;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 0.85em;
+    }
+    .setting-item input:focus, .setting-item select:focus {
+      outline: none;
+      border-color: #00e5ff;
+    }
+
+    /* Mode selector */
+    .mode-selector {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .mode-btn {
+      padding: 6px 14px;
+      background: #1a1a3a;
+      color: #888;
+      border: 1px solid #3a3a5a;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.8em;
+      font-weight: normal;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { border-color: #00e5ff; color: #ccc; background: #1a1a3a; }
+    .mode-btn.active {
+      background: #00e5ff;
+      color: #000;
+      border-color: #00e5ff;
+      font-weight: bold;
+    }
+
+    /* Progress */
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: #1a1a3a;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #00e5ff;
+      width: 0%;
+      transition: width 0.1s;
+    }
+
+    /* Symbol table */
+    .symbol-table {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      font-size: 0.7em;
+      margin-top: 6px;
+    }
+    .symbol-table.cols-8 { grid-template-columns: repeat(8, 1fr); }
+    .symbol-entry {
+      background: #1a1a3a;
+      padding: 2px 6px;
+      border-radius: 2px;
+      display: flex;
+      justify-content: space-between;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .symbol-entry .sym-val { color: #76ff03; overflow: hidden; text-overflow: ellipsis; }
+    .symbol-entry .sym-freq { color: #ffab40; white-space: nowrap; }
+
+    .mode-desc {
+      font-size: 0.75em;
+      color: #9ab;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      background: #0a0a1a;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 600px) {
+      .settings-grid { grid-template-columns: 1fr; }
+      .symbol-table, .symbol-table.cols-8 { grid-template-columns: repeat(2, 1fr); }
+      .data-display { font-size: 0.65em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>TEXT → AUDIO MODULATOR</h1>
+  <p class="subtitle" id="subtitle">FSK テキスト音声変調器</p>
+
+  <div class="container">
+
+    <!-- Input Panel -->
+    <div class="panel">
+      <h2>入力テキスト</h2>
+      <div class="btn-row" style="margin-bottom:8px;">
+        <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">文字の変換</button>
+        <button id="btn-reset-text" onclick="resetText()" class="secondary">文章リセット</button>
+      </div>
+      <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
+    </div>
+
+    <!-- Modulation Mode -->
+    <div class="panel">
+      <h2>変調モード</h2>
+      <div class="mode-selector" id="mode-selector">
+        <button class="mode-btn" data-mode="fsk2">2bit (4-FSK)</button>
+        <button class="mode-btn active" data-mode="fsk4">4bit (16-FSK)</button>
+        <button class="mode-btn" data-mode="fsk8">8bit (256-FSK)</button>
+        <button class="mode-btn" data-mode="fsk16">16bit (65536-FSK)</button>
+        <button class="mode-btn" data-mode="morse">モールス信号（英数字）</button>
+        <button class="mode-btn" data-mode="morse_kana">和文モールス（カナ）</button>
+        <button class="mode-btn" data-mode="phone">ポケベル式 (4×4 DTMF)</button>
+      </div>
+      <div class="mode-desc" id="mode-desc">16-FSK: 1シンボル=4bit、16段階の周波数で符号化。安定性と速度のバランス良し。</div>
+    </div>
+
+    <!-- Controls (再生コントロール) -->
+    <div class="panel">
+      <h2>再生コントロール</h2>
+      <div class="btn-row">
+        <button id="btn-encode" onclick="encode()">エンコード</button>
+        <button id="btn-play" onclick="play()" disabled>再生 ▶</button>
+        <button id="btn-stop" onclick="stop()" class="stop" disabled>停止 ■</button>
+        <button id="btn-download" onclick="downloadWav()" class="secondary" disabled>WAVダウンロード</button>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="panel" style="padding:10px 16px;">
+      <div class="progress-bar" style="margin:0;"><div class="progress-fill" id="progress"></div></div>
+      <span class="pipe-step" id="step-text" style="display:none;"></span>
+      <span class="pipe-step" id="step-utf8" style="display:none;"></span>
+      <span class="pipe-step" id="step-bits" style="display:none;"></span>
+      <span class="pipe-step" id="step-frame" style="display:none;"></span>
+      <span class="pipe-step" id="step-mod" style="display:none;"></span>
+      <span class="pipe-step" id="step-audio" style="display:none;"></span>
+    </div>
+
+    <!-- Waveform / Spectrum -->
+    <div class="panel">
+      <h2>波形 / スペクトラム</h2>
+      <canvas id="waveform"></canvas>
+      <canvas id="spectrum"></canvas>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel">
+      <h2>設定</h2>
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>ベース周波数 (Hz)</label>
+          <input type="number" id="set-base-freq" value="800" min="200" max="4000" step="50">
+        </div>
+        <div class="setting-item">
+          <label>周波数間隔 (Hz)</label>
+          <input type="number" id="set-freq-step" value="150" min="50" max="500" step="10">
+        </div>
+        <div class="setting-item">
+          <label>シンボル長 (ms)</label>
+          <input type="number" id="set-symbol-dur" value="50" min="10" max="500" step="10">
+        </div>
+        <div class="setting-item">
+          <label>音量</label>
+          <input type="range" id="set-volume" min="0" max="100" value="50">
+        </div>
+      </div>
+
+      <label style="margin-top:8px;" id="symbol-table-label">シンボルテーブル</label>
+      <div class="symbol-table" id="symbol-table"></div>
+    </div>
+
+    <!-- Data Inspector (collapsible) -->
+    <div class="panel" id="inspector-panel">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>データインスペクタ</span>
+        <button id="btn-inspector-toggle" onclick="toggleInspector()" class="secondary" style="padding:2px 10px;font-size:0.85em;line-height:1.4;">－</button>
+      </h2>
+      <div id="inspector-body">
+        <label>UTF-8 バイト列 (HEX)</label>
+        <div class="data-display" id="disp-hex"></div>
+
+        <label style="margin-top:6px;">ビット列</label>
+        <div class="data-display" id="disp-bits"></div>
+
+        <label style="margin-top:6px;">フレーム構造</label>
+        <div class="data-display" id="disp-frame"></div>
+
+        <label style="margin-top:6px;">シンボル列</label>
+        <div class="data-display" id="disp-symbols"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // =========================================================================
+    // Kuroshiro (漢字→かな変換)
+    // =========================================================================
+    let kuroshiroInst = null;
+    let kuroshiroReady = false;
+    let kuroshiroFailed = false;
+
+    const kuroshiroInitPromise = (async function initKuroshiro() {
+      const statusEl = document.getElementById('kanji-status');
+      try {
+        const KuroshiroCls = (typeof Kuroshiro === 'function') ? Kuroshiro : Kuroshiro.default;
+        const k = new KuroshiroCls();
+        await k.init(new KuromojiAnalyzer({
+          dictPath: 'vendor/dict/'
+        }));
+        kuroshiroInst = k;
+        kuroshiroReady = true;
+        if (statusEl) { statusEl.textContent = '漢字変換: OK'; statusEl.style.color = '#4caf50'; }
+      } catch(e) {
+        kuroshiroFailed = true;
+        console.warn('kuroshiro init failed:', e);
+        const msg = e && (e.message || String(e));
+        if (statusEl) { statusEl.textContent = '漢字変換: エラー → ' + msg; statusEl.style.color = '#e63946'; }
+      }
+    })();
+
+    // =========================================================================
+    // カナ→ローマ字変換（フォールバック用静的テーブル・ヘボン式）
+    // =========================================================================
+    const KANA_ROMAJI_TABLE = {
+      'あ':'a','い':'i','う':'u','え':'e','お':'o',
+      'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
+      'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so',
+      'た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+      'な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no',
+      'は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+      'ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+      'や':'ya','ゆ':'yu','よ':'yo',
+      'ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro',
+      'わ':'wa','ゐ':'i','ゑ':'e','を':'o','ん':'n',
+      'が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+      'ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo',
+      'だ':'da','ぢ':'ji','づ':'zu','で':'de','ど':'do',
+      'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo',
+      'ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po',
+      'きゃ':'kya','きゅ':'kyu','きょ':'kyo',
+      'しゃ':'sha','しゅ':'shu','しょ':'sho',
+      'ちゃ':'cha','ちゅ':'chu','ちょ':'cho',
+      'にゃ':'nya','にゅ':'nyu','にょ':'nyo',
+      'ひゃ':'hya','ひゅ':'hyu','ひょ':'hyo',
+      'みゃ':'mya','みゅ':'myu','みょ':'myo',
+      'りゃ':'rya','りゅ':'ryu','りょ':'ryo',
+      'ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo',
+      'じゃ':'ja','じゅ':'ju','じょ':'jo',
+      'びゃ':'bya','びゅ':'byu','びょ':'byo',
+      'ぴゃ':'pya','ぴゅ':'pyu','ぴょ':'pyo',
+      'っ':'tt',
+      'ー':'-','、':',','。':'.','「':'"','」':'"','・':' ',
+    };
+
+    function kanaToRomajiSimple(text) {
+      // カタカナ→ひらがな
+      text = text.replace(/[\u30A1-\u30F6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+      let result = '';
+      let i = 0;
+      while (i < text.length) {
+        // 2文字組み合わせを先に試す（きゃ等）
+        const two = text.slice(i, i + 2);
+        if (two.length === 2 && KANA_ROMAJI_TABLE[two]) {
+          result += KANA_ROMAJI_TABLE[two] + ' ';
+          i += 2;
+          continue;
+        }
+        const one = text[i];
+        if (KANA_ROMAJI_TABLE[one]) {
+          // っ は次の子音を重ねる
+          if (one === 'っ') {
+            const next = text.slice(i + 1, i + 3);
+            const nextTwo = KANA_ROMAJI_TABLE[next] || KANA_ROMAJI_TABLE[text[i + 1]];
+            if (nextTwo) { result += nextTwo[0]; }
+            else { result += 'tt'; }
+          } else {
+            result += KANA_ROMAJI_TABLE[one] + ' ';
+          }
+        } else {
+          result += one;
+        }
+        i++;
+      }
+      return result.trim();
+    }
+
+    // サイクル状態: 'original' → 'romaji' → 'katakana' → 'original' → ...
+    let _cycleState = 'original';
+    let _originalText = null;
+
+    async function cycleKanaRomaji() {
+      const ta = document.getElementById('input-text');
+      const btn = document.getElementById('btn-cycle-kana');
+
+      // kuroshiro 初期化待機（必要な場合）
+      if (!kuroshiroReady && !kuroshiroFailed) {
+        btn.disabled = true;
+        btn.textContent = '読込中...';
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        );
+        try {
+          await Promise.race([kuroshiroInitPromise, timeout]);
+        } catch(e) {
+          // タイムアウト → フォールバックで続行
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      btn.disabled = true;
+      btn.textContent = '変換中...';
+
+      try {
+        if (_cycleState === 'original') {
+          // 元文 → ローマ字
+          _originalText = ta.value;
+          if (kuroshiroReady) {
+            ta.value = await kuroshiroInst.convert(ta.value, { to: 'romaji', mode: 'spaced', romajiSystem: 'hepburn' });
+          } else {
+            ta.value = kanaToRomajiSimple(ta.value);
+          }
+          _cycleState = 'romaji';
+          btn.textContent = '文字の変換 (→カタカナ)';
+        } else if (_cycleState === 'romaji') {
+          // ローマ字 → カタカナ（元文から再変換）
+          if (kuroshiroReady) {
+            ta.value = await kuroshiroInst.convert(_originalText, { to: 'katakana', mode: 'normal' });
+          } else {
+            alert('カタカナ変換にはkuroshiro辞書が必要です。');
+            btn.textContent = '文字の変換 (→カタカナ)';
+            return;
+          }
+          _cycleState = 'katakana';
+          btn.textContent = '文字の変換 (→元に戻す)';
+        } else {
+          // カタカナ → 元文
+          ta.value = _originalText;
+          _originalText = null;
+          _cycleState = 'original';
+          btn.textContent = '文字の変換';
+        }
+      } catch(e) {
+        alert('変換に失敗しました: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        if (_cycleState === 'original' && btn.textContent === '変換中...') {
+          btn.textContent = '文字の変換';
+        }
+      }
+    }
+    window.cycleKanaRomaji = cycleKanaRomaji;
+
+    function resetText() {
+      // Stop any active playback
+      if (isPlaying && sourceNode) {
+        sourceNode.stop();
+        isPlaying = false;
+      }
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+
+      // Clear audio state
+      audioBuffer = null;
+      sourceNode = null;
+      gainNode = null;
+      analyser = null;
+
+      // Reset UI controls
+      btnPlay.disabled = true;
+      btnStop.disabled = true;
+      btnDownload.disabled = true;
+      progress.style.width = '0%';
+
+      // Clear pipeline steps
+      Object.values(steps).forEach(s => {
+        s.className = 'pipe-step';
+        s.style.display = 'none';
+      });
+
+      // Clear data displays
+      dispHex.textContent = '';
+      dispBits.textContent = '';
+      dispFrame.textContent = '';
+      dispSymbols.innerHTML = '';
+
+      // Clear waveform canvas
+      drawWaveform();
+
+      // Reset text input and cycle state
+      const ta = document.getElementById('input-text');
+      ta.value = '';
+      _originalText = null;
+      _cycleState = 'original';
+      const btn = document.getElementById('btn-cycle-kana');
+      btn.textContent = '文字の変換';
+      btn.disabled = false;
+    }
+    window.resetText = resetText;
+
+    // =========================================================================
+    // Configuration
+    // =========================================================================
+    const config = {
+      get baseFreq()   { return parseInt(document.getElementById('set-base-freq').value) || 800; },
+      get freqStep()   { return parseInt(document.getElementById('set-freq-step').value) || 150; },
+      get symbolDur()  { return parseInt(document.getElementById('set-symbol-dur').value) || 50; },
+      get volume()     { return parseInt(document.getElementById('set-volume').value) / 100; },
+      sampleRate: 44100,
+      syncPattern: [0xAA, 0xAA, 0x7E],
+    };
+
+    // =========================================================================
+    // Modulation modes
+    // =========================================================================
+    let currentMode = 'fsk4';
+
+    const MODE_INFO = {
+      fsk2:  { bits: 2,  symbols: 4,     label: '4-FSK (2bit)',     desc: '4-FSK: 1シンボル=2bit、4段階の周波数。超安定だが遅い。' },
+      fsk4:  { bits: 4,  symbols: 16,    label: '16-FSK (4bit)',    desc: '16-FSK: 1シンボル=4bit、16段階の周波数。安定性と速度のバランス良し。' },
+      fsk8:  { bits: 8,  symbols: 256,   label: '256-FSK (8bit)',   desc: '256-FSK: 1シンボル=8bit、256段階の周波数。高速だが環境依存。' },
+      fsk16: { bits: 16, symbols: 65536, label: '65536-FSK (16bit)', desc: '65536-FSK: 1シンボル=16bit、65536段階の周波数。超高速だが実用性は限定的。' },
+      morse: { bits: 0,  symbols: 0,     label: 'モールス信号',      desc: 'モールス信号: 短点(・)と長点(-)で文字を符号化。古典的な通信方式。※英数字(A-Z, 0-9)と一部記号のみ対応。日本語は変換できません。' },
+      morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。漢字はkuroshiroで自動かな変換。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。数字0-9は国際モールス符号で対応。' },
+      phone: { bits: 0,  symbols: 16,    label: 'ポケベル式 DTMF',  desc: 'ポケベル式: 4×4 DTMF和音(16種)でかな・英字・数字を符号化。漢字はkuroshiroで自動かな変換。2つの和音で1文字を表現。行(第1和音)+段(第2和音)。英字A-Z・数字0-9にも対応。' },
+    };
+
+    // =========================================================================
+    // Morse code table
+    // =========================================================================
+    const MORSE_TABLE = {
+      'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....','I':'..','J':'.---',
+      'K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.','Q':'--.-','R':'.-.','S':'...','T':'-',
+      'U':'..-','V':'...-','W':'.--','X':'-..-','Y':'-.--','Z':'--..',
+      '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....',
+      '6':'-....','7':'--...','8':'---..','9':'----.',
+      '.':'.-.-.-',',':'--..--','?':'..--..','!':'-.-.--',':':'---...',';':'-.-.-.',
+      '-':'-....-','/':'-..-.','(':'-.--.',')':'-.--.-','=':'-...-','+':'.-.-.',
+      '@':'.--.-.','\'':'.----.','\"':'.-..-.','_':'..--.-',
+      ' ':' ',
+    };
+
+    // =========================================================================
+    // 和文モールス信号 (Wabun / Kana Morse code)
+    // =========================================================================
+    const KANA_MORSE_TABLE = {
+      // あ行
+      'あ':'--.--', 'い':'.-', 'う':'..-', 'え':'-.---', 'お':'.-...',
+      // か行
+      'か':'.-..', 'き':'-.-..', 'く':'...-', 'け':'-.--', 'こ':'----',
+      // さ行
+      'さ':'-.-.-', 'し':'--.-.', 'す':'---.-', 'せ':'.---.', 'そ':'----.',
+      // た行
+      'た':'-.', 'ち':'..-.', 'つ':'.--.', 'て':'.-.--', 'と':'..-..',
+      // な行
+      'な':'.-.', 'に':'-.-.', 'ぬ':'....', 'ね':'--.-', 'の':'..--',
+      // は行
+      'は':'-...', 'ひ':'--..-', 'ふ':'--..', 'へ':'.', 'ほ':'-..',
+      // ま行
+      'ま':'-..-', 'み':'..-.-', 'む':'-', 'め':'-...-', 'も':'-..-.',
+      // や行
+      'や':'.--', 'ゆ':'-..--', 'よ':'--',
+      // ら行
+      'ら':'...', 'り':'--.', 'る':'-.--.-', 'れ':'---', 'ろ':'.-.-',
+      // わ行
+      'わ':'-.-', 'ゐ':'.-..-', 'ゑ':'.--..',  'を':'.---', 'ん':'.-.-.',
+      // 数字（国際モールスと共通）
+      '0':'-----', '1':'.----', '2':'..---', '3':'...--', '4':'....-',
+      '5':'.....', '6':'-....', '7':'--...', '8':'---..', '9':'----.',
+      // 記号
+      'ー':'.--.-',  // 長音
+      '、':'.-.-.-', // 読点
+      '。':'.-.-..', // 句点
+      ' ':' ',
+    };
+
+    // 濁点(゛)と半濁点(゜)のモールス符号
+    const DAKUTEN_MORSE = '..';       // ゛
+    const HANDAKUTEN_MORSE = '..--.'; // ゜
+
+    // 濁音→清音への分解マッピング
+    const DAKUTEN_MAP = {
+      'が':'か','ぎ':'き','ぐ':'く','げ':'け','ご':'こ',
+      'ざ':'さ','じ':'し','ず':'す','ぜ':'せ','ぞ':'そ',
+      'だ':'た','ぢ':'ち','づ':'つ','で':'て','ど':'と',
+      'ば':'は','び':'ひ','ぶ':'ふ','べ':'へ','ぼ':'ほ',
+    };
+
+    // 半濁音→清音への分解マッピング
+    const HANDAKUTEN_MAP = {
+      'ぱ':'は','ぴ':'ひ','ぷ':'ふ','ぺ':'へ','ぽ':'ほ',
+    };
+
+    // カナ文字をモールス符号列に変換 (濁音・半濁音は分解)
+    function kanaCharToMorse(ch) {
+      if (KANA_MORSE_TABLE[ch]) return [KANA_MORSE_TABLE[ch]];
+      if (DAKUTEN_MAP[ch]) return [KANA_MORSE_TABLE[DAKUTEN_MAP[ch]], DAKUTEN_MORSE];
+      if (HANDAKUTEN_MAP[ch]) return [KANA_MORSE_TABLE[HANDAKUTEN_MAP[ch]], HANDAKUTEN_MORSE];
+      return null;
+    }
+
+    // =========================================================================
+    // Phone/Pager DTMF (ポケベル式)
+    // =========================================================================
+    const DTMF_ROW_FREQS = [697, 770, 852, 941];
+    const DTMF_COL_FREQS = [1209, 1336, 1477, 1633];
+
+    // Chord index (0-15) → DTMF frequencies
+    // Grid layout:
+    //   Col0(1209) Col1(1336) Col2(1477) Col3(1633)
+    // Row0(697):  [0]=1    [1]=2    [2]=3    [3]=A
+    // Row1(770):  [4]=4    [5]=5    [6]=6    [7]=B
+    // Row2(852):  [8]=7    [9]=8    [10]=9   [11]=C
+    // Row3(941):  [12]=*   [13]=0   [14]=#   [15]=D
+    const DTMF_KEY_LABELS = ['1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'];
+
+    function getDTMFFreqs(chordIdx) {
+      const row = Math.floor(chordIdx / 4);
+      const col = chordIdx % 4;
+      return [DTMF_ROW_FREQS[row], DTMF_COL_FREQS[col]];
+    }
+
+    // ポケベル式: 2和音で1文字
+    // 第1和音 = 行 (0-15), 第2和音 = 段 (0-4)
+    //
+    // Row mapping (第1和音):
+    //  0: あ行  1: か行  2: さ行  3: た行
+    //  4: な行  5: は行  6: ま行  7: や行
+    //  8: ら行  9: わ行  10: が行 11: ざ行
+    // 12: だ行 13: ば行 14: ぱ行  15: 記号
+    //
+    // Column mapping (第2和音):
+    //  0: あ段  1: い段  2: う段  3: え段  4: お段
+
+    const PHONE_ROW_LABELS = [
+      'あ行','か行','さ行','た行',
+      'な行','は行','ま行','や行',
+      'ら行','わ行','が行','ざ行',
+      'だ行','ば行','ぱ行','記号'
+    ];
+
+    const PHONE_ROW_CHARS = [
+      // 列0-4: かな段（あ段～お段）、列5-9: 英字 A-Z（行0-4の各5文字、行5のZ）
+      ['あ','い','う','え','お', 'A','B','C','D','E'],  // 0
+      ['か','き','く','け','こ', 'F','G','H','I','J'],  // 1
+      ['さ','し','す','せ','そ', 'K','L','M','N','O'],  // 2
+      ['た','ち','つ','て','と', 'P','Q','R','S','T'],  // 3
+      ['な','に','ぬ','ね','の', 'U','V','W','X','Y'],  // 4
+      ['は','ひ','ふ','へ','ほ', 'Z'],                  // 5
+      ['ま','み','む','め','も'],  // 6
+      ['や','','ゆ','','よ'],      // 7 (い段・え段は空)
+      ['ら','り','る','れ','ろ'],  // 8
+      ['わ','を','ん','',''],      // 9
+      ['が','ぎ','ぐ','げ','ご'],  // 10
+      ['ざ','じ','ず','ぜ','ぞ'],  // 11
+      ['だ','ぢ','づ','で','ど'],  // 12
+      ['ば','び','ぶ','べ','ぼ'],  // 13
+      ['ぱ','ぴ','ぷ','ぺ','ぽ'],  // 14
+      // 列0-4: 記号、列5-14: 数字0-9、列15: スペース
+      ['。','、','ー','！','？', '0','1','2','3','4','5','6','7','8','9'],  // 15
+    ];
+
+    // Build reverse map: kana/alpha/num → { row, col }
+    const KANA_TO_PHONE = {};
+    PHONE_ROW_CHARS.forEach((chars, row) => {
+      chars.forEach((ch, col) => {
+        if (ch) KANA_TO_PHONE[ch] = { row, col };
+      });
+    });
+    // 小文字英字 → 大文字と同じマッピング
+    'abcdefghijklmnopqrstuvwxyz'.split('').forEach(ch => {
+      const upper = ch.toUpperCase();
+      if (KANA_TO_PHONE[upper]) KANA_TO_PHONE[ch] = KANA_TO_PHONE[upper];
+    });
+    // スペース (行15, 列15 = DTMFコードD)
+    KANA_TO_PHONE[' '] = { row: 15, col: 15 };
+    KANA_TO_PHONE['　'] = { row: 15, col: 15 };
+
+    // Katakana → Hiragana conversion
+    function katakanaToHiragana(str) {
+      return str.replace(/[\u30A1-\u30F6]/g, function(ch) {
+        return String.fromCharCode(ch.charCodeAt(0) - 0x60);
+      });
+    }
+
+    // Text → key press pairs [{char, row, col}, ...]
+    function textToPhonePairs(text) {
+      const hira = katakanaToHiragana(text);
+      const pairs = [];
+      for (const ch of hira) {
+        if (KANA_TO_PHONE[ch]) {
+          pairs.push({ char: ch, ...KANA_TO_PHONE[ch] });
+        }
+        // Skip characters not in the table (kanji etc.)
+      }
+      return pairs;
+    }
+
+    // Japanese Kana to Romaji for Morse (Wabun code simplified to romaji approach)
+    function textToMorseSource(text) {
+      // Convert to uppercase for latin, keep as-is for display
+      return text.toUpperCase();
+    }
+
+    function charToMorse(ch) {
+      if (MORSE_TABLE[ch]) return MORSE_TABLE[ch];
+      return null; // unknown character
+    }
+
+    // =========================================================================
+    // DOM
+    // =========================================================================
+    const inputText      = document.getElementById('input-text');
+    const dispHex        = document.getElementById('disp-hex');
+    const dispBits       = document.getElementById('disp-bits');
+    const dispFrame      = document.getElementById('disp-frame');
+    const dispSymbols    = document.getElementById('disp-symbols');
+    const waveformCanvas = document.getElementById('waveform');
+    const spectrumCanvas = document.getElementById('spectrum');
+    const progress       = document.getElementById('progress');
+    const btnPlay        = document.getElementById('btn-play');
+    const btnStop        = document.getElementById('btn-stop');
+    const btnDownload    = document.getElementById('btn-download');
+    const subtitle       = document.getElementById('subtitle');
+    const modeDesc       = document.getElementById('mode-desc');
+    const symbolTableLabel = document.getElementById('symbol-table-label');
+
+    const steps = {
+      text:  document.getElementById('step-text'),
+      utf8:  document.getElementById('step-utf8'),
+      bits:  document.getElementById('step-bits'),
+      frame: document.getElementById('step-frame'),
+      mod:   document.getElementById('step-mod'),
+      audio: document.getElementById('step-audio'),
+    };
+
+    // =========================================================================
+    // State
+    // =========================================================================
+    let audioBuffer = null;
+    let audioCtx    = null;
+    let sourceNode  = null;
+    let gainNode    = null;
+    let isPlaying   = false;
+    let animId      = null;
+    let analyser    = null;
+
+    // =========================================================================
+    // Mode selector
+    // =========================================================================
+    document.getElementById('mode-selector').addEventListener('click', function(e) {
+      const btn = e.target.closest('.mode-btn');
+      if (!btn) return;
+      const mode = btn.dataset.mode;
+      currentMode = mode;
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const info = MODE_INFO[mode];
+      modeDesc.textContent = info.desc;
+      subtitle.textContent = info.label + ' テキスト音声変調器';
+      updateSymbolTable();
+    });
+
+    // =========================================================================
+    // Symbol table display
+    // =========================================================================
+    function updateSymbolTable() {
+      const table = document.getElementById('symbol-table');
+      table.innerHTML = '';
+
+      if (currentMode === 'phone') {
+        symbolTableLabel.textContent = 'ポケベル式 DTMF かな・英数字テーブル';
+        table.className = 'symbol-table';
+        table.style.gridTemplateColumns = 'auto repeat(5, 1fr)';
+        // かな部分 (列0-4)
+        const vowels = ['あ段','い段','う段','え段','お段'];
+        const headerBlank = document.createElement('div');
+        headerBlank.className = 'symbol-entry';
+        headerBlank.style.background = '#0a0a1a';
+        headerBlank.innerHTML = '<span style="color:#00e5ff;">行＼段</span>';
+        table.appendChild(headerBlank);
+        for (const v of vowels) {
+          const hd = document.createElement('div');
+          hd.className = 'symbol-entry';
+          hd.style.background = '#0a0a1a';
+          hd.innerHTML = `<span style="color:#00e5ff;">${v}</span>`;
+          table.appendChild(hd);
+        }
+        for (let r = 0; r < 16; r++) {
+          const rowDiv = document.createElement('div');
+          rowDiv.className = 'symbol-entry';
+          rowDiv.innerHTML = `<span class="sym-val">${DTMF_KEY_LABELS[r]}</span><span class="sym-freq">${PHONE_ROW_LABELS[r]}</span>`;
+          table.appendChild(rowDiv);
+          for (let c = 0; c < 5; c++) {
+            const ch = PHONE_ROW_CHARS[r][c] || '';
+            const cellDiv = document.createElement('div');
+            cellDiv.className = 'symbol-entry';
+            if (ch) {
+              cellDiv.innerHTML = `<span class="sym-val" style="font-size:1.2em;">${ch}</span>`;
+            } else {
+              cellDiv.innerHTML = '<span style="color:#333;">-</span>';
+            }
+            table.appendChild(cellDiv);
+          }
+        }
+        // 英字・数字部分
+        const sepDiv = document.createElement('div');
+        sepDiv.style.cssText = 'grid-column: 1 / -1; color: #00e5ff; font-size: 0.75em; margin-top: 8px; padding: 2px 0; border-top: 1px solid #2a2a4a;';
+        sepDiv.textContent = '英字 A-Z (行0-5, 列5-9) / 数字 0-9 (行15, 列5-14)';
+        table.appendChild(sepDiv);
+        // 英字 A-Z
+        const alphaLabel = document.createElement('div');
+        alphaLabel.style.cssText = 'grid-column: 1 / -1; color: #888; font-size: 0.7em;';
+        alphaLabel.textContent = '英字:';
+        table.appendChild(alphaLabel);
+        table.style.gridTemplateColumns = 'repeat(6, 1fr)';
+        for (let i = 0; i < 26; i++) {
+          const ch = String.fromCharCode(65 + i);
+          const entry = KANA_TO_PHONE[ch];
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = entry
+            ? `<span class="sym-val">${ch}</span><span class="sym-freq">[${DTMF_KEY_LABELS[entry.row]},${DTMF_KEY_LABELS[entry.col]}]</span>`
+            : `<span class="sym-val">${ch}</span><span style="color:#333;">-</span>`;
+          table.appendChild(div);
+        }
+        // 数字 0-9
+        const numLabel = document.createElement('div');
+        numLabel.style.cssText = 'grid-column: 1 / -1; color: #888; font-size: 0.7em; margin-top: 4px;';
+        numLabel.textContent = '数字:';
+        table.appendChild(numLabel);
+        for (let i = 0; i <= 9; i++) {
+          const ch = String(i);
+          const entry = KANA_TO_PHONE[ch];
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = entry
+            ? `<span class="sym-val">${ch}</span><span class="sym-freq">[${DTMF_KEY_LABELS[entry.row]},${DTMF_KEY_LABELS[entry.col]}]</span>`
+            : `<span class="sym-val">${ch}</span><span style="color:#333;">-</span>`;
+          table.appendChild(div);
+        }
+        return;
+      }
+
+      if (currentMode === 'morse') {
+        symbolTableLabel.textContent = 'モールス信号テーブル (抜粋)';
+        table.className = 'symbol-table';
+        const show = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+        for (const ch of show) {
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = `<span class="sym-val">${ch}</span><span class="sym-freq">${MORSE_TABLE[ch]}</span>`;
+          table.appendChild(div);
+        }
+        return;
+      }
+
+      if (currentMode === 'morse_kana') {
+        symbolTableLabel.textContent = '和文モールス信号テーブル';
+        table.className = 'symbol-table';
+        // 50音順で表示
+        const kanaRows = [
+          'あいうえお','かきくけこ','さしすせそ','たちつてと',
+          'なにぬねの','はひふへほ','まみむめも','やゆよ',
+          'らりるれろ','わゐゑをん'
+        ];
+        for (const row of kanaRows) {
+          for (const ch of row) {
+            const code = KANA_MORSE_TABLE[ch];
+            if (!code) continue;
+            const div = document.createElement('div');
+            div.className = 'symbol-entry';
+            div.innerHTML = `<span class="sym-val">${ch}</span><span class="sym-freq">${code}</span>`;
+            table.appendChild(div);
+          }
+        }
+        // 濁点・半濁点・記号
+        const specials = [
+          { label: '゛', code: DAKUTEN_MORSE },
+          { label: '゜', code: HANDAKUTEN_MORSE },
+          { label: 'ー', code: KANA_MORSE_TABLE['ー'] },
+          { label: '、', code: KANA_MORSE_TABLE['、'] },
+          { label: '。', code: KANA_MORSE_TABLE['。'] },
+        ];
+        for (const s of specials) {
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = `<span class="sym-val">${s.label}</span><span class="sym-freq">${s.code}</span>`;
+          table.appendChild(div);
+        }
+        return;
+      }
+
+      const info = MODE_INFO[currentMode];
+      const numSymbols = info.symbols;
+      symbolTableLabel.textContent = `${info.label} シンボルテーブル`;
+
+      // For large tables, show only a subset
+      const maxShow = Math.min(numSymbols, 32);
+      const cols = numSymbols <= 16 ? 4 : numSymbols <= 256 ? 8 : 4;
+      table.className = 'symbol-table' + (cols === 8 ? ' cols-8' : '');
+
+      for (let i = 0; i < maxShow; i++) {
+        const freq = config.baseFreq + i * config.freqStep;
+        const bits = i.toString(2).padStart(info.bits, '0');
+        const div = document.createElement('div');
+        div.className = 'symbol-entry';
+        div.innerHTML = `<span class="sym-val">${bits}</span><span class="sym-freq">${freq}Hz</span>`;
+        table.appendChild(div);
+      }
+      if (maxShow < numSymbols) {
+        const div = document.createElement('div');
+        div.className = 'symbol-entry';
+        div.style.gridColumn = `1 / -1`;
+        div.style.textAlign = 'center';
+        div.style.color = '#666';
+        div.innerHTML = `... 他 ${numSymbols - maxShow} シンボル (${config.baseFreq + maxShow * config.freqStep}Hz ~ ${config.baseFreq + (numSymbols - 1) * config.freqStep}Hz)`;
+        table.appendChild(div);
+      }
+    }
+    updateSymbolTable();
+    document.getElementById('set-base-freq').addEventListener('input', updateSymbolTable);
+    document.getElementById('set-freq-step').addEventListener('input', updateSymbolTable);
+    document.getElementById('set-volume').addEventListener('input', function() {
+      if (gainNode) gainNode.gain.value = config.volume;
+    });
+
+    // =========================================================================
+    // Data inspector toggle
+    // =========================================================================
+    let _inspectorOpen = true;
+    window.toggleInspector = function() {
+      const body = document.getElementById('inspector-body');
+      const btn  = document.getElementById('btn-inspector-toggle');
+      _inspectorOpen = !_inspectorOpen;
+      body.style.display = _inspectorOpen ? '' : 'none';
+      btn.textContent = _inspectorOpen ? '－' : '＋';
+    };
+
+    // =========================================================================
+    // CRC-8 (polynomial 0x07)
+    // =========================================================================
+    function crc8(bytes) {
+      let crc = 0x00;
+      for (const b of bytes) {
+        crc ^= b;
+        for (let i = 0; i < 8; i++) {
+          if (crc & 0x80) {
+            crc = ((crc << 1) ^ 0x07) & 0xFF;
+          } else {
+            crc = (crc << 1) & 0xFF;
+          }
+        }
+      }
+      return crc;
+    }
+
+    // =========================================================================
+    // Pipeline step highlighting
+    // =========================================================================
+    function setStep(name) {
+      const order = ['text', 'utf8', 'bits', 'frame', 'mod', 'audio'];
+      const idx = order.indexOf(name);
+      order.forEach((s, i) => {
+        steps[s].className = 'pipe-step' +
+          (i < idx ? ' done' : '') +
+          (i === idx ? ' active' : '');
+      });
+    }
+
+    // =========================================================================
+    // FSK Encode (generic N-bit)
+    // =========================================================================
+    function encodeFSK(utf8Bytes, bitsPerSymbol) {
+      // Frame: [SYNC: AA AA 7E] [LENGTH: 2 bytes] [PAYLOAD] [CRC-8]
+      setStep('frame');
+      const payloadLen = utf8Bytes.length;
+      const lenHigh = (payloadLen >> 8) & 0xFF;
+      const lenLow  = payloadLen & 0xFF;
+      const framePayload = [lenHigh, lenLow, ...utf8Bytes];
+      const crc = crc8(framePayload);
+      const frame = [...config.syncPattern, lenHigh, lenLow, ...utf8Bytes, crc];
+      const frameHex = frame.map(b => b.toString(16).toUpperCase().padStart(2, '0'));
+
+      dispFrame.innerHTML =
+        `<span class="frame-info">同期:</span> <span class="hex">${frameHex.slice(0, 3).join(' ')}</span> | ` +
+        `<span class="frame-info">長さ:</span> <span class="hex">${frameHex.slice(3, 5).join(' ')}</span> (${payloadLen}) | ` +
+        `<span class="frame-info">データ:</span> <span class="hex">${frameHex.slice(5, -1).join(' ')}</span> | ` +
+        `<span class="frame-info">CRC:</span> <span class="hex">${frameHex.slice(-1)[0]}</span>`;
+
+      // Frame bytes → N-bit symbols
+      setStep('mod');
+
+      // Convert frame to bit string
+      let allBits = '';
+      for (const b of frame) {
+        allBits += b.toString(2).padStart(8, '0');
+      }
+      // Pad to multiple of bitsPerSymbol
+      while (allBits.length % bitsPerSymbol !== 0) {
+        allBits += '0';
+      }
+
+      const symbols = [];
+      for (let i = 0; i < allBits.length; i += bitsPerSymbol) {
+        const chunk = allBits.substring(i, i + bitsPerSymbol);
+        symbols.push(parseInt(chunk, 2));
+      }
+
+      // Display symbols (limit for large sets)
+      const maxDisp = Math.min(symbols.length, 100);
+      const symbolDisplay = symbols.slice(0, maxDisp).map(s => {
+        const bits = s.toString(2).padStart(bitsPerSymbol, '0');
+        const freq = config.baseFreq + s * config.freqStep;
+        return `<span class="bits">${bits}</span>→<span class="freq-info">${freq}Hz</span>`;
+      }).join('  ');
+      const ellipsis = symbols.length > maxDisp ? `  <span style="color:#666">... +${symbols.length - maxDisp}</span>` : '';
+      dispSymbols.innerHTML = symbolDisplay + ellipsis + `  <span style="color:#666">(${symbols.length} symbols)</span>`;
+
+      // Generate audio
+      setStep('audio');
+      const symbolDurSec = config.symbolDur / 1000;
+      const samplesPerSymbol = Math.round(config.sampleRate * symbolDurSec);
+      const totalSamples = symbols.length * samplesPerSymbol;
+      const buf = new Float32Array(totalSamples);
+      const vol = 1.0;
+      const rampSamples = Math.min(Math.round(samplesPerSymbol * 0.05), 20);
+
+      for (let si = 0; si < symbols.length; si++) {
+        const freq = config.baseFreq + symbols[si] * config.freqStep;
+        const offset = si * samplesPerSymbol;
+        for (let i = 0; i < samplesPerSymbol; i++) {
+          const t = i / config.sampleRate;
+          let sample = Math.sin(2 * Math.PI * freq * t) * vol;
+          if (i < rampSamples) {
+            sample *= i / rampSamples;
+          } else if (i > samplesPerSymbol - rampSamples) {
+            sample *= (samplesPerSymbol - i) / rampSamples;
+          }
+          buf[offset + i] = sample;
+        }
+      }
+      return buf;
+    }
+
+    // =========================================================================
+    // Morse Encode
+    // =========================================================================
+    function encodeMorse(text) {
+      setStep('frame');
+      // For morse, no binary frame - convert text directly
+      const morseSource = textToMorseSource(text);
+      const morseSequence = [];
+      let morseDisplay = '';
+      let skippedCount = 0;
+
+      for (const ch of morseSource) {
+        const code = charToMorse(ch);
+        if (code === null) { skippedCount++; continue; }
+        if (code === ' ') {
+          morseSequence.push({ type: 'word-gap' });
+          morseDisplay += ' <span style="color:#666">/</span> ';
+        } else {
+          for (const sym of code) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          morseDisplay += `<span class="morse-info">${ch}</span>=<span class="bits">${code}</span>  `;
+        }
+      }
+
+      if (morseSequence.length === 0) {
+        dispFrame.innerHTML = '<span class="frame-info" style="color:#e63946;">⚠ モールス信号に変換可能な文字がありません。英数字(A-Z, 0-9)と一部記号のみ対応しています。</span>';
+        dispSymbols.innerHTML = '';
+        return new Float32Array(0);
+      }
+
+      let skipNote = '';
+      if (skippedCount > 0) {
+        skipNote = `  <span style="color:#e63946;">(${skippedCount}文字スキップ: 非対応文字)</span>`;
+      }
+
+      dispFrame.innerHTML = '<span class="frame-info">モールス信号（フレーム不使用）</span>' + skipNote;
+      dispSymbols.innerHTML = morseDisplay;
+
+      // Generate audio
+      setStep('audio');
+      const freq = config.baseFreq;
+      const vol = 1.0;
+      const ditDur = config.symbolDur / 1000;  // dit duration in seconds
+      const dahDur = ditDur * 3;
+      const elementGap = ditDur;     // gap between dits/dahs within a character
+      const charGap = ditDur * 3;    // gap between characters
+      const wordGap = ditDur * 7;    // gap between words
+
+      // Calculate total duration
+      let totalDur = 0;
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit': totalDur += ditDur + elementGap; break;
+          case 'dah': totalDur += dahDur + elementGap; break;
+          case 'char-gap': totalDur += charGap - elementGap; break; // subtract already-added element gap
+          case 'word-gap': totalDur += wordGap; break;
+        }
+      }
+
+      const totalSamples = Math.round(totalDur * config.sampleRate);
+      const buf = new Float32Array(totalSamples);
+      let pos = 0;
+
+      const rampMs = 0.002; // 2ms ramp for click prevention
+      const rampSamples = Math.round(rampMs * config.sampleRate);
+
+      function writeTone(duration) {
+        const samples = Math.round(duration * config.sampleRate);
+        for (let i = 0; i < samples && pos + i < buf.length; i++) {
+          const t = i / config.sampleRate;
+          let sample = Math.sin(2 * Math.PI * freq * t) * vol;
+          if (i < rampSamples) sample *= i / rampSamples;
+          if (i > samples - rampSamples) sample *= (samples - i) / rampSamples;
+          buf[pos + i] = sample;
+        }
+        pos += samples;
+      }
+
+      function writeSilence(duration) {
+        pos += Math.round(duration * config.sampleRate);
+      }
+
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit':
+            writeTone(ditDur);
+            writeSilence(elementGap);
+            break;
+          case 'dah':
+            writeTone(dahDur);
+            writeSilence(elementGap);
+            break;
+          case 'char-gap':
+            writeSilence(charGap - elementGap);
+            break;
+          case 'word-gap':
+            writeSilence(wordGap);
+            break;
+        }
+      }
+
+      return buf;
+    }
+
+    // =========================================================================
+    // 和文モールス信号 Encode
+    // =========================================================================
+    function encodeKanaMorse(text) {
+      setStep('frame');
+      // カタカナ→ひらがな変換
+      const hira = katakanaToHiragana(text);
+      const morseSequence = [];
+      let morseDisplay = '';
+      let skippedCount = 0;
+
+      for (const ch of hira) {
+        if (ch === ' ' || ch === '　') {
+          morseSequence.push({ type: 'word-gap' });
+          morseDisplay += ' <span style="color:#666">/</span> ';
+          continue;
+        }
+        // 長音・句読点はそのまま
+        if (KANA_MORSE_TABLE[ch]) {
+          const code = KANA_MORSE_TABLE[ch];
+          for (const sym of code) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          morseDisplay += `<span class="morse-info">${ch}</span>=<span class="bits">${code}</span>  `;
+          continue;
+        }
+        // 濁音・半濁音の分解
+        const codes = kanaCharToMorse(ch);
+        if (codes) {
+          // 清音部分のモールス表示用ラベル
+          const baseCh = DAKUTEN_MAP[ch] || HANDAKUTEN_MAP[ch];
+          const isDakuten = !!DAKUTEN_MAP[ch];
+          const mark = isDakuten ? '゛' : '゜';
+          const markCode = isDakuten ? DAKUTEN_MORSE : HANDAKUTEN_MORSE;
+          // 清音のコード
+          for (const sym of codes[0]) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          // 濁点/半濁点のコード
+          for (const sym of codes[1]) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          morseDisplay += `<span class="morse-info">${ch}</span>=<span class="bits">${codes[0]}</span>+<span class="bits">${markCode}</span><span style="color:#666">(${baseCh}${mark})</span>  `;
+          continue;
+        }
+        skippedCount++;
+      }
+
+      if (morseSequence.length === 0) {
+        dispFrame.innerHTML = '<span class="frame-info" style="color:#e63946;">⚠ 和文モールスに変換可能な文字がありません。ひらがな・カタカナを入力してください。</span>';
+        dispSymbols.innerHTML = '';
+        return new Float32Array(0);
+      }
+
+      let skipNote = '';
+      if (skippedCount > 0) {
+        skipNote = `  <span style="color:#e63946;">(${skippedCount}文字スキップ: 非対応文字)</span>`;
+      }
+
+      dispFrame.innerHTML = '<span class="frame-info">和文モールス信号（フレーム不使用）</span>' + skipNote;
+      dispSymbols.innerHTML = morseDisplay;
+
+      // Generate audio (same timing as standard Morse)
+      setStep('audio');
+      const freq = config.baseFreq;
+      const vol = 1.0;
+      const ditDur = config.symbolDur / 1000;
+      const dahDur = ditDur * 3;
+      const elementGap = ditDur;
+      const charGap = ditDur * 3;
+      const wordGap = ditDur * 7;
+
+      let totalDur = 0;
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit': totalDur += ditDur + elementGap; break;
+          case 'dah': totalDur += dahDur + elementGap; break;
+          case 'char-gap': totalDur += charGap - elementGap; break;
+          case 'word-gap': totalDur += wordGap; break;
+        }
+      }
+
+      const totalSamples = Math.round(totalDur * config.sampleRate);
+      const buf = new Float32Array(totalSamples);
+      let pos = 0;
+
+      const rampMs = 0.002;
+      const rampSamples = Math.round(rampMs * config.sampleRate);
+
+      function writeTone(duration) {
+        const samples = Math.round(duration * config.sampleRate);
+        for (let i = 0; i < samples && pos + i < buf.length; i++) {
+          const t = i / config.sampleRate;
+          let sample = Math.sin(2 * Math.PI * freq * t) * vol;
+          if (i < rampSamples) sample *= i / rampSamples;
+          if (i > samples - rampSamples) sample *= (samples - i) / rampSamples;
+          buf[pos + i] = sample;
+        }
+        pos += samples;
+      }
+
+      function writeSilence(duration) {
+        pos += Math.round(duration * config.sampleRate);
+      }
+
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit':
+            writeTone(ditDur);
+            writeSilence(elementGap);
+            break;
+          case 'dah':
+            writeTone(dahDur);
+            writeSilence(elementGap);
+            break;
+          case 'char-gap':
+            writeSilence(charGap - elementGap);
+            break;
+          case 'word-gap':
+            writeSilence(wordGap);
+            break;
+        }
+      }
+
+      return buf;
+    }
+
+    // =========================================================================
+    // Phone/Pager DTMF Encode (ポケベル式)
+    // =========================================================================
+    function encodePhone(text) {
+      setStep('frame');
+      const pairs = textToPhonePairs(text);
+
+      if (pairs.length === 0) {
+        dispFrame.innerHTML = '<span class="frame-info" style="color:#e63946;">⚠ 変換可能なかな文字がありません。ひらがな・カタカナ（50音）を入力してください。</span>';
+        dispSymbols.innerHTML = '';
+        return new Float32Array(0);
+      }
+
+      // Display frame info
+      const pairDisplay = pairs.map(p => {
+        const rowLabel = DTMF_KEY_LABELS[p.row];
+        const colLabel = DTMF_KEY_LABELS[p.col];
+        return `<span class="morse-info">${p.char}</span>=<span class="bits">[${rowLabel},${colLabel}]</span>`;
+      }).join('  ');
+      dispFrame.innerHTML = `<span class="frame-info">ポケベル式 (${pairs.length}文字)</span>`;
+      dispSymbols.innerHTML = pairDisplay;
+
+      // Generate audio
+      setStep('audio');
+      const toneDur = config.symbolDur / 1000;       // duration of each chord tone
+      const intraGap = toneDur * 0.3;                 // gap between two chords of a pair
+      const interGap = toneDur * 0.8;                 // gap between character pairs
+      const vol = 1.0;
+      const sr = config.sampleRate;
+      const rampMs = 0.003;
+      const rampSamples = Math.round(rampMs * sr);
+
+      // Calculate total duration
+      const pairDur = toneDur * 2 + intraGap + interGap;
+      const totalDur = pairs.length * pairDur;
+      const totalSamples = Math.round(totalDur * sr);
+      const buf = new Float32Array(totalSamples);
+      let pos = 0;
+
+      function writeDTMFChord(chordIdx, duration) {
+        const freqs = getDTMFFreqs(chordIdx);
+        const samples = Math.round(duration * sr);
+        const ramp = Math.min(rampSamples, Math.round(samples * 0.1));
+        for (let i = 0; i < samples && pos + i < buf.length; i++) {
+          const t = i / sr;
+          let sample = (Math.sin(2 * Math.PI * freqs[0] * t) +
+                        Math.sin(2 * Math.PI * freqs[1] * t)) * 0.5 * vol;
+          if (i < ramp) sample *= i / ramp;
+          if (i > samples - ramp) sample *= (samples - i) / ramp;
+          buf[pos + i] = sample;
+        }
+        pos += samples;
+      }
+
+      function writeSilence(duration) {
+        pos += Math.round(duration * sr);
+      }
+
+      for (const pair of pairs) {
+        // First chord: row
+        writeDTMFChord(pair.row, toneDur);
+        writeSilence(intraGap);
+        // Second chord: column
+        writeDTMFChord(pair.col, toneDur);
+        writeSilence(interGap);
+      }
+
+      return buf;
+    }
+
+    // =========================================================================
+    // Main encode
+    // =========================================================================
+    window.encode = async function() {
+      const rawText = inputText.value;
+      if (!rawText.trim()) { alert('テキストを入力してください'); return; }
+
+      // 漢字モードでは kuroshiro でかな変換
+      let text = rawText;
+      if ((currentMode === 'morse_kana' || currentMode === 'phone') && kuroshiroReady) {
+        const btnEncode = document.getElementById('btn-encode');
+        btnEncode.disabled = true;
+        btnEncode.textContent = '変換中...';
+        try {
+          text = await kuroshiroInst.convert(rawText, { to: 'hiragana' });
+        } finally {
+          btnEncode.disabled = false;
+          btnEncode.textContent = 'エンコード';
+        }
+      }
+
+      // Step 1: Text → UTF-8 bytes
+      setStep('utf8');
+      const encoder = new TextEncoder();
+      const utf8Bytes = encoder.encode(rawText);
+      const hexStr = Array.from(utf8Bytes).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+      dispHex.innerHTML = `<span class="hex">${hexStr}</span>  <span style="color:#666">(${utf8Bytes.length} bytes)</span>`;
+
+      // Step 2: Bytes → Bits
+      setStep('bits');
+      let bitStr = '';
+      for (const b of utf8Bytes) {
+        bitStr += b.toString(2).padStart(8, '0');
+      }
+      const bitDisplay = bitStr.match(/.{1,8}/g).join(' ');
+      dispBits.innerHTML = `<span class="bits">${bitDisplay}</span>  <span style="color:#666">(${bitStr.length} bits)</span>`;
+
+      // Step 3+4+5: Mode-specific encoding
+      if (currentMode === 'phone') {
+        audioBuffer = encodePhone(text);
+      } else if (currentMode === 'morse') {
+        audioBuffer = encodeMorse(rawText);
+      } else if (currentMode === 'morse_kana') {
+        audioBuffer = encodeKanaMorse(text);
+      } else {
+        const bitsPerSymbol = MODE_INFO[currentMode].bits;
+        audioBuffer = encodeFSK(utf8Bytes, bitsPerSymbol);
+      }
+
+      drawWaveform();
+      btnPlay.disabled = false;
+      btnDownload.disabled = false;
+      setStep('audio');
+      progress.style.width = '100%';
+    };
+
+    // =========================================================================
+    // Waveform drawing
+    // =========================================================================
+    function drawWaveform() {
+      const canvas = waveformCanvas;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+
+      ctx.fillStyle = '#0a0a1a';
+      ctx.fillRect(0, 0, w, h);
+
+      if (!audioBuffer || audioBuffer.length === 0) return;
+
+      ctx.strokeStyle = '#2a2a4a';
+      ctx.beginPath();
+      ctx.moveTo(0, h / 2);
+      ctx.lineTo(w, h / 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+
+      const step = audioBuffer.length / w;
+      for (let x = 0; x < w; x++) {
+        const idx = Math.floor(x * step);
+        const y = (1 - audioBuffer[idx]) * h / 2;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // =========================================================================
+    // Live spectrum drawing
+    // =========================================================================
+    function drawSpectrum() {
+      if (!analyser) return;
+      const canvas = spectrumCanvas;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+
+      const bufLen = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufLen);
+
+      function renderFrame() {
+        if (!isPlaying) return;
+        animId = requestAnimationFrame(renderFrame);
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(0, 0, w, h);
+
+        const barWidth = w / bufLen * 2;
+        for (let i = 0; i < bufLen; i++) {
+          const val = dataArray[i] / 255;
+          const barH = val * h;
+          const hue = (i / bufLen) * 180 + 180;
+          ctx.fillStyle = `hsla(${hue}, 100%, 60%, 0.8)`;
+          ctx.fillRect(i * barWidth, h - barH, barWidth - 1, barH);
+        }
+      }
+      renderFrame();
+    }
+
+    // =========================================================================
+    // Playback
+    // =========================================================================
+    window.play = function() {
+      if (!audioBuffer || isPlaying) return;
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: config.sampleRate
+      });
+
+      const buffer = audioCtx.createBuffer(1, audioBuffer.length, config.sampleRate);
+      buffer.getChannelData(0).set(audioBuffer);
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = config.volume;
+
+      sourceNode = audioCtx.createBufferSource();
+      sourceNode.buffer = buffer;
+      sourceNode.connect(analyser);
+      analyser.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      sourceNode.onended = function() {
+        isPlaying = false;
+        btnPlay.disabled = false;
+        btnStop.disabled = true;
+        progress.style.width = '100%';
+      };
+
+      sourceNode.start();
+      isPlaying = true;
+      btnPlay.disabled = true;
+      btnStop.disabled = false;
+
+      const totalDur = audioBuffer.length / config.sampleRate;
+      const startTime = audioCtx.currentTime;
+      function updateProgress() {
+        if (!isPlaying) return;
+        const elapsed = audioCtx.currentTime - startTime;
+        const pct = Math.min(elapsed / totalDur * 100, 100);
+        progress.style.width = pct + '%';
+        requestAnimationFrame(updateProgress);
+      }
+      updateProgress();
+      drawSpectrum();
+    };
+
+    window.stop = function() {
+      if (!isPlaying || !sourceNode) return;
+      sourceNode.stop();
+      isPlaying = false;
+      btnPlay.disabled = false;
+      btnStop.disabled = true;
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+    };
+
+    // =========================================================================
+    // WAV download
+    // =========================================================================
+    window.downloadWav = function() {
+      if (!audioBuffer) return;
+
+      const numSamples = audioBuffer.length;
+      const bitsPerSample = 16;
+      const numChannels = 1;
+      const sampleRate = config.sampleRate;
+      const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+      const blockAlign = numChannels * bitsPerSample / 8;
+      const dataSize = numSamples * blockAlign;
+      const headerSize = 44;
+      const buffer = new ArrayBuffer(headerSize + dataSize);
+      const view = new DataView(buffer);
+
+      writeStr(view, 0, 'RIFF');
+      view.setUint32(4, headerSize + dataSize - 8, true);
+      writeStr(view, 8, 'WAVE');
+      writeStr(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, bitsPerSample, true);
+      writeStr(view, 36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      for (let i = 0; i < numSamples; i++) {
+        const sample = Math.max(-1, Math.min(1, audioBuffer[i]));
+        view.setInt16(headerSize + i * 2, sample * 0x7FFF, true);
+      }
+
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'modulated_audio.wav';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    function writeStr(view, offset, str) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+
+  })();
+  </script>
+</body>
+</html>
