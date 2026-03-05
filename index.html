@@ -1484,19 +1484,15 @@
   let currentConvertType = 'katakana';
   let lastConvertResult = '';
   let kuroshiro = null;
+  let kuroshiroLoading = false;
 
-  (async () => {
-    await new Promise(r => {
-      if (document.readyState !== 'loading') r();
-      else document.addEventListener('DOMContentLoaded', r);
-    });
-    const btn = document.getElementById('gemini-btn');
-    const resultEl = document.getElementById('gemini-result');
-    if (!btn || !resultEl) return;
+  async function initKuroshiro(btn, resultEl) {
+    if (kuroshiro) return true;
+    if (kuroshiroLoading) return false;
+    kuroshiroLoading = true;
     btn.disabled = true;
     resultEl.className = 'gemini-result loading';
-    resultEl.textContent = '辞書を読み込み中...（初回は時間がかかります）';
-    await new Promise(r => setTimeout(r, 50)); // UIを更新させてから重い処理を開始
+    resultEl.textContent = '辞書を読み込み中...（初回のみ）';
     try {
       if (typeof Kuroshiro === 'undefined') throw new Error('Kuroshiro が読み込まれていません');
       if (typeof KuromojiAnalyzer === 'undefined') throw new Error('KuromojiAnalyzer が読み込まれていません');
@@ -1505,16 +1501,19 @@
       kuroshiro = new KuroshiroClass();
       await Promise.race([
         kuroshiro.init(new AnalyzerClass({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' })),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('辞書の読み込みがタイムアウトしました（ネットワークを確認してください）')), 20000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('辞書の読み込みがタイムアウトしました')), 20000))
       ]);
-      resultEl.className = 'gemini-result';
-      resultEl.textContent = '変換結果がここに表示されます';
-      btn.disabled = false;
+      return true;
     } catch (err) {
+      kuroshiro = null;
       resultEl.className = 'gemini-result error';
       resultEl.textContent = '読み込みエラー: ' + (err.message || String(err));
+      btn.disabled = false;
+      return false;
+    } finally {
+      kuroshiroLoading = false;
     }
-  })();
+  }
 
   function setConvertType(type) {
     currentConvertType = type;
@@ -1527,17 +1526,17 @@
   }
 
   async function doConvert() {
-    if (!kuroshiro) {
-      document.getElementById('gemini-result').className = 'gemini-result error';
-      document.getElementById('gemini-result').textContent = '辞書の読み込みが完了していません。しばらく待ってください。';
-      return;
-    }
     const text = document.getElementById('input-text').value.trim();
     if (!text) return;
 
     const btn = document.getElementById('gemini-btn');
     const resultEl = document.getElementById('gemini-result');
     const applyBtn = document.getElementById('gemini-apply-btn');
+
+    if (!kuroshiro) {
+      const ok = await initKuroshiro(btn, resultEl);
+      if (!ok) return;
+    }
 
     btn.disabled = true;
     resultEl.className = 'gemini-result loading';
