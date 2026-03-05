@@ -565,8 +565,8 @@
       fsk8:  { bits: 8,  symbols: 256,   label: '256-FSK (8bit)',   desc: '256-FSK: 1シンボル=8bit、256段階の周波数。高速だが環境依存。' },
       fsk16: { bits: 16, symbols: 65536, label: '65536-FSK (16bit)', desc: '65536-FSK: 1シンボル=16bit、65536段階の周波数。超高速だが実用性は限定的。' },
       morse: { bits: 0,  symbols: 0,     label: 'モールス信号',      desc: 'モールス信号: 短点(・)と長点(-)で文字を符号化。古典的な通信方式。※英数字(A-Z, 0-9)と一部記号のみ対応。日本語は変換できません。' },
-      morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。漢字はkuroshiroで自動かな変換。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。' },
-      phone: { bits: 0,  symbols: 16,    label: 'ポケベル式 DTMF',  desc: 'ポケベル式: 4×4 DTMF和音(16種)で50音を符号化。漢字はkuroshiroで自動かな変換。2つの和音で1文字を表現。行(第1和音)+段(第2和音)。' },
+      morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。漢字はkuroshiroで自動かな変換。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。数字0-9は国際モールス符号で対応。' },
+      phone: { bits: 0,  symbols: 16,    label: 'ポケベル式 DTMF',  desc: 'ポケベル式: 4×4 DTMF和音(16種)でかな・英字・数字を符号化。漢字はkuroshiroで自動かな変換。2つの和音で1文字を表現。行(第1和音)+段(第2和音)。英字A-Z・数字0-9にも対応。' },
     };
 
     // =========================================================================
@@ -608,6 +608,9 @@
       'ら':'...', 'り':'--.', 'る':'-.--.-', 'れ':'---', 'ろ':'.-.-',
       // わ行
       'わ':'-.-', 'ゐ':'.-..-', 'ゑ':'.--..',  'を':'.---', 'ん':'.-.-.',
+      // 数字（国際モールスと共通）
+      '0':'-----', '1':'.----', '2':'..---', '3':'...--', '4':'....-',
+      '5':'.....', '6':'-....', '7':'--...', '8':'---..', '9':'----.',
       // 記号
       'ー':'.--.-',  // 長音
       '、':'.-.-.-', // 読点
@@ -681,12 +684,13 @@
     ];
 
     const PHONE_ROW_CHARS = [
-      ['あ','い','う','え','お'],  // 0
-      ['か','き','く','け','こ'],  // 1
-      ['さ','し','す','せ','そ'],  // 2
-      ['た','ち','つ','て','と'],  // 3
-      ['な','に','ぬ','ね','の'],  // 4
-      ['は','ひ','ふ','へ','ほ'],  // 5
+      // 列0-4: かな段（あ段～お段）、列5-9: 英字 A-Z（行0-4の各5文字、行5のZ）
+      ['あ','い','う','え','お', 'A','B','C','D','E'],  // 0
+      ['か','き','く','け','こ', 'F','G','H','I','J'],  // 1
+      ['さ','し','す','せ','そ', 'K','L','M','N','O'],  // 2
+      ['た','ち','つ','て','と', 'P','Q','R','S','T'],  // 3
+      ['な','に','ぬ','ね','の', 'U','V','W','X','Y'],  // 4
+      ['は','ひ','ふ','へ','ほ', 'Z'],                  // 5
       ['ま','み','む','め','も'],  // 6
       ['や','','ゆ','','よ'],      // 7 (い段・え段は空)
       ['ら','り','る','れ','ろ'],  // 8
@@ -696,19 +700,25 @@
       ['だ','ぢ','づ','で','ど'],  // 12
       ['ば','び','ぶ','べ','ぼ'],  // 13
       ['ぱ','ぴ','ぷ','ぺ','ぽ'],  // 14
-      ['。','、','ー','！','？'],   // 15
+      // 列0-4: 記号、列5-14: 数字0-9、列15: スペース
+      ['。','、','ー','！','？', '0','1','2','3','4','5','6','7','8','9'],  // 15
     ];
 
-    // Build reverse map: kana → { row, col }
+    // Build reverse map: kana/alpha/num → { row, col }
     const KANA_TO_PHONE = {};
     PHONE_ROW_CHARS.forEach((chars, row) => {
       chars.forEach((ch, col) => {
         if (ch) KANA_TO_PHONE[ch] = { row, col };
       });
     });
-    // Space
-    KANA_TO_PHONE[' '] = { row: 15, col: 5 };
-    KANA_TO_PHONE['　'] = { row: 15, col: 5 };
+    // 小文字英字 → 大文字と同じマッピング
+    'abcdefghijklmnopqrstuvwxyz'.split('').forEach(ch => {
+      const upper = ch.toUpperCase();
+      if (KANA_TO_PHONE[upper]) KANA_TO_PHONE[ch] = KANA_TO_PHONE[upper];
+    });
+    // スペース (行15, 列15 = DTMFコードD)
+    KANA_TO_PHONE[' '] = { row: 15, col: 15 };
+    KANA_TO_PHONE['　'] = { row: 15, col: 15 };
 
     // Katakana → Hiragana conversion
     function katakanaToHiragana(str) {
@@ -802,10 +812,10 @@
       table.innerHTML = '';
 
       if (currentMode === 'phone') {
-        symbolTableLabel.textContent = 'ポケベル式 DTMF 50音テーブル';
+        symbolTableLabel.textContent = 'ポケベル式 DTMF かな・英数字テーブル';
         table.className = 'symbol-table';
         table.style.gridTemplateColumns = 'auto repeat(5, 1fr)';
-        // Header row
+        // かな部分 (列0-4)
         const vowels = ['あ段','い段','う段','え段','お段'];
         const headerBlank = document.createElement('div');
         headerBlank.className = 'symbol-entry';
@@ -819,16 +829,13 @@
           hd.innerHTML = `<span style="color:#00e5ff;">${v}</span>`;
           table.appendChild(hd);
         }
-        // Data rows
         for (let r = 0; r < 16; r++) {
-          const freqs1 = getDTMFFreqs(r);
           const rowDiv = document.createElement('div');
           rowDiv.className = 'symbol-entry';
           rowDiv.innerHTML = `<span class="sym-val">${DTMF_KEY_LABELS[r]}</span><span class="sym-freq">${PHONE_ROW_LABELS[r]}</span>`;
           table.appendChild(rowDiv);
           for (let c = 0; c < 5; c++) {
             const ch = PHONE_ROW_CHARS[r][c] || '';
-            const freqs2 = getDTMFFreqs(c);
             const cellDiv = document.createElement('div');
             cellDiv.className = 'symbol-entry';
             if (ch) {
@@ -838,6 +845,42 @@
             }
             table.appendChild(cellDiv);
           }
+        }
+        // 英字・数字部分
+        const sepDiv = document.createElement('div');
+        sepDiv.style.cssText = 'grid-column: 1 / -1; color: #00e5ff; font-size: 0.75em; margin-top: 8px; padding: 2px 0; border-top: 1px solid #2a2a4a;';
+        sepDiv.textContent = '英字 A-Z (行0-5, 列5-9) / 数字 0-9 (行15, 列5-14)';
+        table.appendChild(sepDiv);
+        // 英字 A-Z
+        const alphaLabel = document.createElement('div');
+        alphaLabel.style.cssText = 'grid-column: 1 / -1; color: #888; font-size: 0.7em;';
+        alphaLabel.textContent = '英字:';
+        table.appendChild(alphaLabel);
+        table.style.gridTemplateColumns = 'repeat(6, 1fr)';
+        for (let i = 0; i < 26; i++) {
+          const ch = String.fromCharCode(65 + i);
+          const entry = KANA_TO_PHONE[ch];
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = entry
+            ? `<span class="sym-val">${ch}</span><span class="sym-freq">[${DTMF_KEY_LABELS[entry.row]},${DTMF_KEY_LABELS[entry.col]}]</span>`
+            : `<span class="sym-val">${ch}</span><span style="color:#333;">-</span>`;
+          table.appendChild(div);
+        }
+        // 数字 0-9
+        const numLabel = document.createElement('div');
+        numLabel.style.cssText = 'grid-column: 1 / -1; color: #888; font-size: 0.7em; margin-top: 4px;';
+        numLabel.textContent = '数字:';
+        table.appendChild(numLabel);
+        for (let i = 0; i <= 9; i++) {
+          const ch = String(i);
+          const entry = KANA_TO_PHONE[ch];
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = entry
+            ? `<span class="sym-val">${ch}</span><span class="sym-freq">[${DTMF_KEY_LABELS[entry.row]},${DTMF_KEY_LABELS[entry.col]}]</span>`
+            : `<span class="sym-val">${ch}</span><span style="color:#333;">-</span>`;
+          table.appendChild(div);
         }
         return;
       }
