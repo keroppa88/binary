@@ -1499,8 +1499,10 @@
     try {
       if (typeof Kuroshiro === 'undefined') throw new Error('Kuroshiro が読み込まれていません');
       if (typeof KuromojiAnalyzer === 'undefined') throw new Error('KuromojiAnalyzer が読み込まれていません');
-      kuroshiro = new Kuroshiro();
-      await kuroshiro.init(new KuromojiAnalyzer({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }));
+      const KuroshiroClass = Kuroshiro.default || Kuroshiro;
+      const AnalyzerClass = KuromojiAnalyzer.default || KuromojiAnalyzer;
+      kuroshiro = new KuroshiroClass();
+      await kuroshiro.init(new AnalyzerClass({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }));
       resultEl.className = 'gemini-result';
       resultEl.textContent = '変換結果がここに表示されます';
       btn.disabled = false;
