@@ -397,8 +397,9 @@
     // =========================================================================
     let kuroshiroInst = null;
     let kuroshiroReady = false;
+    let kuroshiroFailed = false;
 
-    (async function initKuroshiro() {
+    const kuroshiroInitPromise = (async function initKuroshiro() {
       const statusEl = document.getElementById('kanji-status');
       try {
         const k = new Kuroshiro();
@@ -409,6 +410,7 @@
         kuroshiroReady = true;
         if (statusEl) { statusEl.textContent = '漢字変換: OK'; statusEl.style.color = '#4caf50'; }
       } catch(e) {
+        kuroshiroFailed = true;
         console.warn('kuroshiro init failed:', e);
         if (statusEl) { statusEl.textContent = '漢字変換: エラー（かな入力のみ）'; statusEl.style.color = '#e63946'; }
       }
@@ -418,8 +420,27 @@
     // カナ→ローマ字変換
     // =========================================================================
     async function convertToRomaji() {
+      if (!kuroshiroReady && !kuroshiroFailed) {
+        const btn = document.getElementById('btn-to-romaji');
+        btn.disabled = true;
+        btn.textContent = '読込中...';
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('タイムアウト（辞書の読込に失敗）')), 15000)
+        );
+        try {
+          await Promise.race([kuroshiroInitPromise, timeout]);
+        } catch(e) {
+          alert('漢字変換ライブラリの読込に失敗しました: ' + e.message);
+          btn.disabled = false;
+          btn.textContent = 'カナ→ローマ字';
+          return;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'カナ→ローマ字';
+        }
+      }
       if (!kuroshiroReady) {
-        alert('漢字変換ライブラリの読込中です。しばらくお待ちください。');
+        alert('漢字変換ライブラリの読込に失敗しました。ページを再読み込みしてください。');
         return;
       }
       const ta = document.getElementById('input-text');
