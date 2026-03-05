@@ -543,6 +543,44 @@
     window.cycleKanaRomaji = cycleKanaRomaji;
 
     function resetText() {
+      // Stop any active playback
+      if (isPlaying && sourceNode) {
+        sourceNode.stop();
+        isPlaying = false;
+      }
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+
+      // Clear audio state
+      audioBuffer = null;
+      sourceNode = null;
+      gainNode = null;
+      analyser = null;
+
+      // Reset UI controls
+      btnPlay.disabled = true;
+      btnStop.disabled = true;
+      btnDownload.disabled = true;
+      progress.style.width = '0%';
+
+      // Clear pipeline steps
+      Object.values(steps).forEach(s => {
+        s.className = 'pipe-step';
+        s.style.display = 'none';
+      });
+
+      // Clear data displays
+      dispHex.textContent = '';
+      dispBits.textContent = '';
+      dispFrame.textContent = '';
+      dispSymbols.innerHTML = '';
+
+      // Clear waveform canvas
+      drawWaveform();
+
+      // Reset text input and cycle state
       const ta = document.getElementById('input-text');
       ta.value = '';
       _originalText = null;
