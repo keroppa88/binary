@@ -4,8 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>テキスト→音声変調</title>
-  <script src="https://cdn.jsdelivr.net/npm/kuroshiro@1.2.0/dist/kuroshiro.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/kuroshiro-analyzer-kuromoji@1.1.0/dist/kuroshiro-analyzer-kuromoji.min.js"></script>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -1480,39 +1479,60 @@
 
   })();
 
-  // ─── テキスト変換（kuroshiro） ────────────────────────────────
+  // ─── テキスト変換（ローカル変換テーブル） ────────────────────────────────
   let currentConvertType = 'katakana';
   let lastConvertResult = '';
-  let kuroshiro = null;
-  let kuroshiroLoading = false;
 
-  async function initKuroshiro(btn, resultEl) {
-    if (kuroshiro) return true;
-    if (kuroshiroLoading) return false;
-    kuroshiroLoading = true;
-    btn.disabled = true;
-    resultEl.className = 'gemini-result loading';
-    resultEl.textContent = '辞書を読み込み中...（初回のみ）';
-    try {
-      if (typeof Kuroshiro === 'undefined') throw new Error('Kuroshiro が読み込まれていません');
-      if (typeof KuromojiAnalyzer === 'undefined') throw new Error('KuromojiAnalyzer が読み込まれていません');
-      const KuroshiroClass = Kuroshiro.default || Kuroshiro;
-      const AnalyzerClass = KuromojiAnalyzer.default || KuromojiAnalyzer;
-      kuroshiro = new KuroshiroClass();
-      await Promise.race([
-        kuroshiro.init(new AnalyzerClass({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' })),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('辞書の読み込みがタイムアウトしました')), 20000))
-      ]);
-      return true;
-    } catch (err) {
-      kuroshiro = null;
-      resultEl.className = 'gemini-result error';
-      resultEl.textContent = '読み込みエラー: ' + (err.message || String(err));
-      btn.disabled = false;
-      return false;
-    } finally {
-      kuroshiroLoading = false;
+  // ひらがな→ヘボン式ローマ字
+  const ROMAJI_MAP = [
+    ['っch','cch'],['っsh','ssh'],['っts','tts'],
+    ['っ([a-z])','$1$1'],
+    ['あ','a'],['い','i'],['う','u'],['え','e'],['お','o'],
+    ['か','ka'],['き','ki'],['く','ku'],['け','ke'],['こ','ko'],
+    ['さ','sa'],['し','shi'],['す','su'],['せ','se'],['そ','so'],
+    ['た','ta'],['ち','chi'],['つ','tsu'],['て','te'],['と','to'],
+    ['な','na'],['に','ni'],['ぬ','nu'],['ね','ne'],['の','no'],
+    ['は','ha'],['ひ','hi'],['ふ','fu'],['へ','he'],['ほ','ho'],
+    ['ま','ma'],['み','mi'],['む','mu'],['め','me'],['も','mo'],
+    ['や','ya'],['ゆ','yu'],['よ','yo'],
+    ['ら','ra'],['り','ri'],['る','ru'],['れ','re'],['ろ','ro'],
+    ['わ','wa'],['ゐ','i'],['ゑ','e'],['を','o'],['ん','n'],
+    ['が','ga'],['ぎ','gi'],['ぐ','gu'],['げ','ge'],['ご','go'],
+    ['ざ','za'],['じ','ji'],['ず','zu'],['ぜ','ze'],['ぞ','zo'],
+    ['だ','da'],['ぢ','ji'],['づ','zu'],['で','de'],['ど','do'],
+    ['ば','ba'],['び','bi'],['ぶ','bu'],['べ','be'],['ぼ','bo'],
+    ['ぱ','pa'],['ぴ','pi'],['ぷ','pu'],['ぺ','pe'],['ぽ','po'],
+    ['きゃ','kya'],['きゅ','kyu'],['きょ','kyo'],
+    ['しゃ','sha'],['しゅ','shu'],['しょ','sho'],
+    ['ちゃ','cha'],['ちゅ','chu'],['ちょ','cho'],
+    ['にゃ','nya'],['にゅ','nyu'],['にょ','nyo'],
+    ['ひゃ','hya'],['ひゅ','hyu'],['ひょ','hyo'],
+    ['みゃ','mya'],['みゅ','myu'],['みょ','myo'],
+    ['りゃ','rya'],['りゅ','ryu'],['りょ','ryo'],
+    ['ぎゃ','gya'],['ぎゅ','gyu'],['ぎょ','gyo'],
+    ['じゃ','ja'],['じゅ','ju'],['じょ','jo'],
+    ['びゃ','bya'],['びゅ','byu'],['びょ','byo'],
+    ['ぴゃ','pya'],['ぴゅ','pyu'],['ぴょ','pyo'],
+    ['ー','-'],['。','.'],['、',','],['「','"'],['」','"'],
+  ];
+
+  function hiraganaToKatakana(str) {
+    return str.replace(/[\u3041-\u3096]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) + 0x60)
+    );
+  }
+
+  function hiraganaToRomaji(str) {
+    // カタカナ→ひらがな（混在テキスト用）
+    let s = str.replace(/[\u30A1-\u30F6]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) - 0x60)
+    );
+    // 順番に変換（長い表記を先に）
+    const sorted = [...ROMAJI_MAP].sort((a, b) => b[0].length - a[0].length);
+    for (const [from, to] of sorted) {
+      s = s.replace(new RegExp(from, 'g'), to);
     }
+    return s;
   }
 
   function setConvertType(type) {
@@ -1525,42 +1545,21 @@
     lastConvertResult = '';
   }
 
-  async function doConvert() {
+  function doConvert() {
     const text = document.getElementById('input-text').value.trim();
     if (!text) return;
 
-    const btn = document.getElementById('gemini-btn');
     const resultEl = document.getElementById('gemini-result');
     const applyBtn = document.getElementById('gemini-apply-btn');
 
-    if (!kuroshiro) {
-      const ok = await initKuroshiro(btn, resultEl);
-      if (!ok) return;
-    }
+    const result = currentConvertType === 'katakana'
+      ? hiraganaToKatakana(text)
+      : hiraganaToRomaji(text);
 
-    btn.disabled = true;
-    resultEl.className = 'gemini-result loading';
-    resultEl.textContent = '変換中...';
-    applyBtn.disabled = true;
-    lastConvertResult = '';
-
-    try {
-      let result;
-      if (currentConvertType === 'katakana') {
-        result = await kuroshiro.convert(text, { to: 'katakana' });
-      } else {
-        result = await kuroshiro.convert(text, { to: 'romaji', romajiSystem: 'hepburn' });
-      }
-      resultEl.className = 'gemini-result';
-      resultEl.textContent = result;
-      lastConvertResult = result;
-      applyBtn.disabled = false;
-    } catch (err) {
-      resultEl.className = 'gemini-result error';
-      resultEl.textContent = 'エラー: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
+    resultEl.className = 'gemini-result';
+    resultEl.textContent = result;
+    lastConvertResult = result;
+    applyBtn.disabled = false;
   }
 
   function applyConvertResult() {
