@@ -412,7 +412,8 @@
       } catch(e) {
         kuroshiroFailed = true;
         console.warn('kuroshiro init failed:', e);
-        if (statusEl) { statusEl.textContent = '漢字変換: エラー（かな入力のみ）'; statusEl.style.color = '#e63946'; }
+        const msg = e && (e.message || String(e));
+        if (statusEl) { statusEl.textContent = '漢字変換: エラー → ' + msg; statusEl.style.color = '#e63946'; }
       }
     })();
 
