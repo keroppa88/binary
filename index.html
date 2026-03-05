@@ -1481,6 +1481,9 @@
 
   // ─── テキスト変換（Gemini API） ────────────────────────────────
   const GEMINI_API_KEY = '__GEMINI_API_KEY__';
+  if (GEMINI_API_KEY === '__GEMINI_API_KEY__') {
+    console.error('APIキーが未設定です。GitHub ActionsでGEMINI_API_KEYシークレットが注入されていません。');
+  }
   const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
 
   let currentConvertType = 'katakana';
@@ -1503,6 +1506,12 @@
     const btn = document.getElementById('gemini-btn');
     const resultEl = document.getElementById('gemini-result');
     const applyBtn = document.getElementById('gemini-apply-btn');
+
+    if (GEMINI_API_KEY === '__GEMINI_API_KEY__') {
+      resultEl.className = 'gemini-result error';
+      resultEl.textContent = 'エラー: APIキーが設定されていません。GitHub ActionsでGEMINI_API_KEYシークレットを注入してからGitHub Pagesのページを開いてください。';
+      return;
+    }
 
     btn.disabled = true;
     resultEl.className = 'gemini-result loading';
