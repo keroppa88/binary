@@ -294,7 +294,8 @@
         <button class="mode-btn active" data-mode="fsk4">4bit (16-FSK)</button>
         <button class="mode-btn" data-mode="fsk8">8bit (256-FSK)</button>
         <button class="mode-btn" data-mode="fsk16">16bit (65536-FSK)</button>
-        <button class="mode-btn" data-mode="morse">モールス信号（英数字のみ）</button>
+        <button class="mode-btn" data-mode="morse">モールス信号（英数字）</button>
+        <button class="mode-btn" data-mode="morse_kana">和文モールス（カナ）</button>
         <button class="mode-btn" data-mode="phone">ポケベル式 (4×4 DTMF)</button>
       </div>
       <div class="mode-desc" id="mode-desc">16-FSK: 1シンボル=4bit、16段階の周波数で符号化。安定性と速度のバランス良し。</div>
@@ -409,6 +410,7 @@
       fsk8:  { bits: 8,  symbols: 256,   label: '256-FSK (8bit)',   desc: '256-FSK: 1シンボル=8bit、256段階の周波数。高速だが環境依存。' },
       fsk16: { bits: 16, symbols: 65536, label: '65536-FSK (16bit)', desc: '65536-FSK: 1シンボル=16bit、65536段階の周波数。超高速だが実用性は限定的。' },
       morse: { bits: 0,  symbols: 0,     label: 'モールス信号',      desc: 'モールス信号: 短点(・)と長点(-)で文字を符号化。古典的な通信方式。※英数字(A-Z, 0-9)と一部記号のみ対応。日本語は変換できません。' },
+      morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。' },
       phone: { bits: 0,  symbols: 16,    label: 'ポケベル式 DTMF',  desc: 'ポケベル式: 4×4 DTMF和音(16種)で50音を符号化。2つの和音で1文字を表現。行(第1和音)+段(第2和音)。' },
     };
 
@@ -426,6 +428,62 @@
       '@':'.--.-.','\'':'.----.','\"':'.-..-.','_':'..--.-',
       ' ':' ',
     };
+
+    // =========================================================================
+    // 和文モールス信号 (Wabun / Kana Morse code)
+    // =========================================================================
+    const KANA_MORSE_TABLE = {
+      // あ行
+      'あ':'--.--', 'い':'.-', 'う':'..-', 'え':'-.---', 'お':'.-...',
+      // か行
+      'か':'.-..', 'き':'-.-..', 'く':'...-', 'け':'-.--', 'こ':'----',
+      // さ行
+      'さ':'-.-.-', 'し':'--.-.', 'す':'---.-', 'せ':'.---.', 'そ':'----.',
+      // た行
+      'た':'-.', 'ち':'..-.', 'つ':'.--.', 'て':'.-.--', 'と':'..-..',
+      // な行
+      'な':'.-.', 'に':'-.-.', 'ぬ':'....', 'ね':'--.-', 'の':'..--',
+      // は行
+      'は':'-...', 'ひ':'--..-', 'ふ':'--..', 'へ':'.', 'ほ':'-..',
+      // ま行
+      'ま':'-..-', 'み':'..-.-', 'む':'-', 'め':'-...-', 'も':'-..-.',
+      // や行
+      'や':'.--', 'ゆ':'-..--', 'よ':'--',
+      // ら行
+      'ら':'...', 'り':'--.', 'る':'-.--.-', 'れ':'---', 'ろ':'.-.-',
+      // わ行
+      'わ':'-.-', 'ゐ':'.-..-', 'ゑ':'.--..',  'を':'.---', 'ん':'.-.-.',
+      // 記号
+      'ー':'.--.-',  // 長音
+      '、':'.-.-.-', // 読点
+      '。':'.-.-..', // 句点
+      ' ':' ',
+    };
+
+    // 濁点(゛)と半濁点(゜)のモールス符号
+    const DAKUTEN_MORSE = '..';       // ゛
+    const HANDAKUTEN_MORSE = '..--.'; // ゜
+
+    // 濁音→清音への分解マッピング
+    const DAKUTEN_MAP = {
+      'が':'か','ぎ':'き','ぐ':'く','げ':'け','ご':'こ',
+      'ざ':'さ','じ':'し','ず':'す','ぜ':'せ','ぞ':'そ',
+      'だ':'た','ぢ':'ち','づ':'つ','で':'て','ど':'と',
+      'ば':'は','び':'ひ','ぶ':'ふ','べ':'へ','ぼ':'ほ',
+    };
+
+    // 半濁音→清音への分解マッピング
+    const HANDAKUTEN_MAP = {
+      'ぱ':'は','ぴ':'ひ','ぷ':'ふ','ぺ':'へ','ぽ':'ほ',
+    };
+
+    // カナ文字をモールス符号列に変換 (濁音・半濁音は分解)
+    function kanaCharToMorse(ch) {
+      if (KANA_MORSE_TABLE[ch]) return [KANA_MORSE_TABLE[ch]];
+      if (DAKUTEN_MAP[ch]) return [KANA_MORSE_TABLE[DAKUTEN_MAP[ch]], DAKUTEN_MORSE];
+      if (HANDAKUTEN_MAP[ch]) return [KANA_MORSE_TABLE[HANDAKUTEN_MAP[ch]], HANDAKUTEN_MORSE];
+      return null;
+    }
 
     // =========================================================================
     // Phone/Pager DTMF (ポケベル式)
@@ -638,6 +696,42 @@
           const div = document.createElement('div');
           div.className = 'symbol-entry';
           div.innerHTML = `<span class="sym-val">${ch}</span><span class="sym-freq">${MORSE_TABLE[ch]}</span>`;
+          table.appendChild(div);
+        }
+        return;
+      }
+
+      if (currentMode === 'morse_kana') {
+        symbolTableLabel.textContent = '和文モールス信号テーブル';
+        table.className = 'symbol-table';
+        // 50音順で表示
+        const kanaRows = [
+          'あいうえお','かきくけこ','さしすせそ','たちつてと',
+          'なにぬねの','はひふへほ','まみむめも','やゆよ',
+          'らりるれろ','わゐゑをん'
+        ];
+        for (const row of kanaRows) {
+          for (const ch of row) {
+            const code = KANA_MORSE_TABLE[ch];
+            if (!code) continue;
+            const div = document.createElement('div');
+            div.className = 'symbol-entry';
+            div.innerHTML = `<span class="sym-val">${ch}</span><span class="sym-freq">${code}</span>`;
+            table.appendChild(div);
+          }
+        }
+        // 濁点・半濁点・記号
+        const specials = [
+          { label: '゛', code: DAKUTEN_MORSE },
+          { label: '゜', code: HANDAKUTEN_MORSE },
+          { label: 'ー', code: KANA_MORSE_TABLE['ー'] },
+          { label: '、', code: KANA_MORSE_TABLE['、'] },
+          { label: '。', code: KANA_MORSE_TABLE['。'] },
+        ];
+        for (const s of specials) {
+          const div = document.createElement('div');
+          div.className = 'symbol-entry';
+          div.innerHTML = `<span class="sym-val">${s.label}</span><span class="sym-freq">${s.code}</span>`;
           table.appendChild(div);
         }
         return;
@@ -907,6 +1001,136 @@
     }
 
     // =========================================================================
+    // 和文モールス信号 Encode
+    // =========================================================================
+    function encodeKanaMorse(text) {
+      setStep('frame');
+      // カタカナ→ひらがな変換
+      const hira = katakanaToHiragana(text);
+      const morseSequence = [];
+      let morseDisplay = '';
+      let skippedCount = 0;
+
+      for (const ch of hira) {
+        if (ch === ' ' || ch === '　') {
+          morseSequence.push({ type: 'word-gap' });
+          morseDisplay += ' <span style="color:#666">/</span> ';
+          continue;
+        }
+        // 長音・句読点はそのまま
+        if (KANA_MORSE_TABLE[ch]) {
+          const code = KANA_MORSE_TABLE[ch];
+          for (const sym of code) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          morseDisplay += `<span class="morse-info">${ch}</span>=<span class="bits">${code}</span>  `;
+          continue;
+        }
+        // 濁音・半濁音の分解
+        const codes = kanaCharToMorse(ch);
+        if (codes) {
+          // 清音部分のモールス表示用ラベル
+          const baseCh = DAKUTEN_MAP[ch] || HANDAKUTEN_MAP[ch];
+          const isDakuten = !!DAKUTEN_MAP[ch];
+          const mark = isDakuten ? '゛' : '゜';
+          const markCode = isDakuten ? DAKUTEN_MORSE : HANDAKUTEN_MORSE;
+          // 清音のコード
+          for (const sym of codes[0]) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          // 濁点/半濁点のコード
+          for (const sym of codes[1]) {
+            morseSequence.push({ type: sym === '.' ? 'dit' : 'dah' });
+          }
+          morseSequence.push({ type: 'char-gap' });
+          morseDisplay += `<span class="morse-info">${ch}</span>=<span class="bits">${codes[0]}</span>+<span class="bits">${markCode}</span><span style="color:#666">(${baseCh}${mark})</span>  `;
+          continue;
+        }
+        skippedCount++;
+      }
+
+      if (morseSequence.length === 0) {
+        dispFrame.innerHTML = '<span class="frame-info" style="color:#e63946;">⚠ 和文モールスに変換可能な文字がありません。ひらがな・カタカナを入力してください。</span>';
+        dispSymbols.innerHTML = '';
+        return new Float32Array(0);
+      }
+
+      let skipNote = '';
+      if (skippedCount > 0) {
+        skipNote = `  <span style="color:#e63946;">(${skippedCount}文字スキップ: 非対応文字)</span>`;
+      }
+
+      dispFrame.innerHTML = '<span class="frame-info">和文モールス信号（フレーム不使用）</span>' + skipNote;
+      dispSymbols.innerHTML = morseDisplay;
+
+      // Generate audio (same timing as standard Morse)
+      setStep('audio');
+      const freq = config.baseFreq;
+      const vol = config.volume;
+      const ditDur = config.symbolDur / 1000;
+      const dahDur = ditDur * 3;
+      const elementGap = ditDur;
+      const charGap = ditDur * 3;
+      const wordGap = ditDur * 7;
+
+      let totalDur = 0;
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit': totalDur += ditDur + elementGap; break;
+          case 'dah': totalDur += dahDur + elementGap; break;
+          case 'char-gap': totalDur += charGap - elementGap; break;
+          case 'word-gap': totalDur += wordGap; break;
+        }
+      }
+
+      const totalSamples = Math.round(totalDur * config.sampleRate);
+      const buf = new Float32Array(totalSamples);
+      let pos = 0;
+
+      const rampMs = 0.002;
+      const rampSamples = Math.round(rampMs * config.sampleRate);
+
+      function writeTone(duration) {
+        const samples = Math.round(duration * config.sampleRate);
+        for (let i = 0; i < samples && pos + i < buf.length; i++) {
+          const t = i / config.sampleRate;
+          let sample = Math.sin(2 * Math.PI * freq * t) * vol;
+          if (i < rampSamples) sample *= i / rampSamples;
+          if (i > samples - rampSamples) sample *= (samples - i) / rampSamples;
+          buf[pos + i] = sample;
+        }
+        pos += samples;
+      }
+
+      function writeSilence(duration) {
+        pos += Math.round(duration * config.sampleRate);
+      }
+
+      for (const item of morseSequence) {
+        switch (item.type) {
+          case 'dit':
+            writeTone(ditDur);
+            writeSilence(elementGap);
+            break;
+          case 'dah':
+            writeTone(dahDur);
+            writeSilence(elementGap);
+            break;
+          case 'char-gap':
+            writeSilence(charGap - elementGap);
+            break;
+          case 'word-gap':
+            writeSilence(wordGap);
+            break;
+        }
+      }
+
+      return buf;
+    }
+
+    // =========================================================================
     // Phone/Pager DTMF Encode (ポケベル式)
     // =========================================================================
     function encodePhone(text) {
@@ -1004,6 +1228,8 @@
         audioBuffer = encodePhone(text);
       } else if (currentMode === 'morse') {
         audioBuffer = encodeMorse(text);
+      } else if (currentMode === 'morse_kana') {
+        audioBuffer = encodeKanaMorse(text);
       } else {
         const bitsPerSymbol = MODE_INFO[currentMode].bits;
         audioBuffer = encodeFSK(utf8Bytes, bitsPerSymbol);
