@@ -301,6 +301,24 @@
       color: #e0d0ff;
     }
     .convert-type-btn:hover { background: #3a1a5a; }
+    .api-key-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .api-key-row input {
+      flex: 1;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      border: 1px solid #4a2a6a;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 0.8em;
+    }
+    .api-key-row input:focus { outline: none; border-color: #c084fc; }
+    .api-key-note { color: #888; font-size: 0.75em; margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -325,6 +343,13 @@
     <!-- テキスト変換パネル -->
     <div class="panel gemini-panel">
       <h2>テキスト変換</h2>
+      <div id="api-key-section" style="display:none;">
+        <p class="api-key-note">Gemini API キーが設定されていません。<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#c084fc;">Google AI Studio</a> でキーを取得して入力してください。</p>
+        <div class="api-key-row">
+          <input type="password" id="gemini-api-key-input" placeholder="Gemini API キーを入力...">
+          <button onclick="saveApiKey()">保存</button>
+        </div>
+      </div>
       <div class="convert-type-row">
         <button class="convert-type-btn active" data-ctype="katakana" onclick="setConvertType('katakana')">テキスト → カタカナ</button>
         <button class="convert-type-btn" data-ctype="romaji" onclick="setConvertType('romaji')">テキスト → ヘボン式ローマ字</button>
@@ -1480,8 +1505,28 @@
   })();
 
   // ─── テキスト変換（Gemini API） ────────────────────────────────
-  const GEMINI_API_KEY = '__GEMINI_API_KEY__';
-  const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
+  const GEMINI_API_KEY_INJECTED = '__GEMINI_API_KEY__';
+  // Split to prevent the CI sed command from replacing this reference value
+  const GEMINI_KEY_PLACEHOLDER = '__GEMINI' + '_API_KEY__';
+
+  function getGeminiApiKey() {
+    if (GEMINI_API_KEY_INJECTED !== GEMINI_KEY_PLACEHOLDER) return GEMINI_API_KEY_INJECTED;
+    return localStorage.getItem('gemini_api_key') || '';
+  }
+
+  function saveApiKey() {
+    const key = document.getElementById('gemini-api-key-input').value.trim();
+    if (!key) return;
+    localStorage.setItem('gemini_api_key', key);
+    document.getElementById('api-key-section').style.display = 'none';
+    document.getElementById('gemini-result').textContent = '変換結果がここに表示されます';
+  }
+
+  (function initApiKeySection() {
+    if (GEMINI_API_KEY_INJECTED === GEMINI_KEY_PLACEHOLDER && !localStorage.getItem('gemini_api_key')) {
+      document.getElementById('api-key-section').style.display = '';
+    }
+  })();
 
   let currentConvertType = 'katakana';
   let lastConvertResult = '';
@@ -1510,12 +1555,22 @@
     applyBtn.disabled = true;
     lastConvertResult = '';
 
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      resultEl.className = 'gemini-result error';
+      resultEl.textContent = 'エラー: Gemini API キーが設定されていません。上のフォームにキーを入力してください。';
+      btn.disabled = false;
+      document.getElementById('api-key-section').style.display = '';
+      return;
+    }
+
+    const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
     const prompt = currentConvertType === 'katakana'
       ? `以下の日本語テキストをすべてカタカナ読みに変換してください。変換結果のみを返し、説明や改行は不要です。\n\n${text}`
       : `以下の日本語テキストをすべてヘボン式ローマ字に変換してください。変換結果のみを返し、説明や改行は不要です。\n\n${text}`;
 
     try {
-      const res = await fetch(GEMINI_ENDPOINT, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
