@@ -331,7 +331,7 @@
         <button class="convert-type-btn" data-ctype="romaji" onclick="setConvertType('romaji')">テキスト → ヘボン式ローマ字</button>
       </div>
       <div class="btn-row">
-        <button onclick="doConvert()" id="gemini-btn">変換</button>
+        <button onclick="doConvert()" id="gemini-btn" disabled>変換</button>
         <button class="secondary" onclick="applyConvertResult()" id="gemini-apply-btn" disabled>入力欄に反映</button>
       </div>
       <label style="margin-top:8px;">変換結果</label>
@@ -1486,8 +1486,21 @@
   let kuroshiro = null;
 
   (async () => {
-    kuroshiro = new Kuroshiro();
-    await kuroshiro.init(new KuromojiAnalyzer({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }));
+    const btn = document.getElementById('gemini-btn');
+    const resultEl = document.getElementById('gemini-result');
+    btn.disabled = true;
+    resultEl.className = 'gemini-result loading';
+    resultEl.textContent = '辞書を読み込み中...';
+    try {
+      kuroshiro = new Kuroshiro();
+      await kuroshiro.init(new KuromojiAnalyzer({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }));
+      resultEl.className = 'gemini-result';
+      resultEl.textContent = '変換結果がここに表示されます';
+      btn.disabled = false;
+    } catch (err) {
+      resultEl.className = 'gemini-result error';
+      resultEl.textContent = '辞書の読み込みに失敗しました: ' + err.message;
+    }
   })();
 
   function setConvertType(type) {
