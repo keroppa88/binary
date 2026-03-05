@@ -281,6 +281,7 @@
       <h2>入力テキスト</h2>
       <div class="btn-row" style="margin-bottom:8px;">
         <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">文字の変換</button>
+        <button id="btn-reset-text" onclick="resetText()" class="secondary">文章リセット</button>
       </div>
       <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
     </div>
@@ -540,6 +541,17 @@
       }
     }
     window.cycleKanaRomaji = cycleKanaRomaji;
+
+    function resetText() {
+      const ta = document.getElementById('input-text');
+      ta.value = '';
+      _originalText = null;
+      _cycleState = 'original';
+      const btn = document.getElementById('btn-cycle-kana');
+      btn.textContent = '文字の変換';
+      btn.disabled = false;
+    }
+    window.resetText = resetText;
 
     // =========================================================================
     // Configuration
