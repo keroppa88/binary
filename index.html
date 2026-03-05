@@ -1495,14 +1495,18 @@
     if (!btn || !resultEl) return;
     btn.disabled = true;
     resultEl.className = 'gemini-result loading';
-    resultEl.textContent = '辞書を読み込み中...';
+    resultEl.textContent = '辞書を読み込み中...（初回は時間がかかります）';
+    await new Promise(r => setTimeout(r, 50)); // UIを更新させてから重い処理を開始
     try {
       if (typeof Kuroshiro === 'undefined') throw new Error('Kuroshiro が読み込まれていません');
       if (typeof KuromojiAnalyzer === 'undefined') throw new Error('KuromojiAnalyzer が読み込まれていません');
       const KuroshiroClass = Kuroshiro.default || Kuroshiro;
       const AnalyzerClass = KuromojiAnalyzer.default || KuromojiAnalyzer;
       kuroshiro = new KuroshiroClass();
-      await kuroshiro.init(new AnalyzerClass({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' }));
+      await Promise.race([
+        kuroshiro.init(new AnalyzerClass({ dictPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict' })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('辞書の読み込みがタイムアウトしました（ネットワークを確認してください）')), 20000))
+      ]);
       resultEl.className = 'gemini-result';
       resultEl.textContent = '変換結果がここに表示されます';
       btn.disabled = false;
