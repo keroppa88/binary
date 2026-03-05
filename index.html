@@ -265,6 +265,51 @@
       .symbol-table, .symbol-table.cols-8 { grid-template-columns: repeat(2, 1fr); }
       .data-display { font-size: 0.65em; }
     }
+
+    /* Gemini AI Panel */
+    .gemini-panel { border-color: #4a2a6a; }
+    .gemini-panel h2 { color: #c084fc; }
+    .gemini-result {
+      background: #0a0a1a;
+      border: 1px solid #4a2a6a;
+      border-radius: 4px;
+      padding: 8px;
+      min-height: 48px;
+      font-size: 0.9em;
+      color: #e0e0e0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .gemini-result.loading { color: #888; font-style: italic; }
+    .gemini-result.error { color: #e63946; }
+    .gemini-badge {
+      display: inline-block;
+      background: #4a2a6a;
+      color: #c084fc;
+      font-size: 0.7em;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .convert-type-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .convert-type-btn {
+      background: #2a1a3a;
+      color: #c084fc;
+      border: 1px solid #4a2a6a;
+      padding: 5px 12px;
+      font-size: 0.8em;
+    }
+    .convert-type-btn.active {
+      background: #4a2a6a;
+      color: #e0d0ff;
+    }
+    .convert-type-btn:hover { background: #3a1a5a; }
   </style>
 </head>
 <body>
@@ -284,6 +329,26 @@
         <button onclick="loadDefaultCSV()" class="secondary">a.csv を読込</button>
       </div>
       <textarea id="input-text">祇園精舍の鐘の声、諸行無常の響きあり。娑羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
+    </div>
+
+    <!-- Gemini AI Conversion Panel -->
+    <div class="panel gemini-panel">
+      <h2>Gemini AI 変換 <span class="gemini-badge">gemini-2.0-flash</span></h2>
+      <div class="convert-type-row">
+        <button class="convert-type-btn active" data-ctype="katakana" onclick="setConvertType('katakana')">テキスト → カタカナ</button>
+        <button class="convert-type-btn" data-ctype="romaji" onclick="setConvertType('romaji')">テキスト → ヘボン式ローマ字</button>
+        <button class="convert-type-btn" data-ctype="morse_kana" onclick="setConvertType('morse_kana')">テキスト → 和文モールス</button>
+      </div>
+      <div class="btn-row">
+        <button onclick="geminiConvert()" id="gemini-btn">AI変換</button>
+        <button class="secondary" onclick="applyGeminiResult()" id="gemini-apply-btn" disabled>入力欄に反映</button>
+      </div>
+      <label style="margin-top:8px;">変換結果</label>
+      <div class="gemini-result" id="gemini-result">変換結果がここに表示されます</div>
+      <div id="gemini-morse-row" style="display:none;margin-top:6px;">
+        <label>和文モールス符号</label>
+        <div class="gemini-result" id="gemini-morse"></div>
+      </div>
     </div>
 
     <!-- Modulation Mode -->
@@ -1427,6 +1492,73 @@
     }
 
   })();
+
+  // ─── Gemini AI 変換 ──────────────────────────────────────────
+  let currentConvertType = 'katakana';
+  let lastGeminiResult = '';
+
+  function setConvertType(type) {
+    currentConvertType = type;
+    document.querySelectorAll('.convert-type-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.ctype === type);
+    });
+    document.getElementById('gemini-morse-row').style.display = 'none';
+    document.getElementById('gemini-result').textContent = '変換結果がここに表示されます';
+    document.getElementById('gemini-apply-btn').disabled = true;
+    lastGeminiResult = '';
+  }
+
+  async function geminiConvert() {
+    const text = document.getElementById('input-text').value.trim();
+    if (!text) return;
+
+    const btn = document.getElementById('gemini-btn');
+    const resultEl = document.getElementById('gemini-result');
+    const morseRow = document.getElementById('gemini-morse-row');
+    const applyBtn = document.getElementById('gemini-apply-btn');
+
+    btn.disabled = true;
+    resultEl.className = 'gemini-result loading';
+    resultEl.textContent = 'Gemini AI に問い合わせ中...';
+    morseRow.style.display = 'none';
+    applyBtn.disabled = true;
+    lastGeminiResult = '';
+
+    try {
+      const res = await fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type: currentConvertType })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        resultEl.className = 'gemini-result error';
+        resultEl.textContent = 'エラー: ' + (data.error || res.statusText);
+      } else {
+        resultEl.className = 'gemini-result';
+        resultEl.textContent = data.result;
+        lastGeminiResult = data.result;
+        applyBtn.disabled = false;
+
+        if (currentConvertType === 'morse_kana' && data.morse) {
+          morseRow.style.display = 'block';
+          document.getElementById('gemini-morse').textContent = data.morse;
+        }
+      }
+    } catch (err) {
+      resultEl.className = 'gemini-result error';
+      resultEl.textContent = 'ネットワークエラー: サーバーが起動していない可能性があります';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function applyGeminiResult() {
+    if (lastGeminiResult) {
+      document.getElementById('input-text').value = lastGeminiResult;
+    }
+  }
   </script>
 </body>
 </html>
