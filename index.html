@@ -280,12 +280,7 @@
     <div class="panel">
       <h2>入力テキスト</h2>
       <div class="btn-row" style="margin-bottom:8px;">
-        <div class="file-input-wrapper">
-          <button onclick="document.getElementById('csv-input').click()" class="secondary">CSVファイル読込</button>
-          <input type="file" id="csv-input" accept=".csv,.txt">
-        </div>
-        <button onclick="loadDefaultCSV()" class="secondary">a.csv を読込</button>
-        <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">漢字→ローマ字</button>
+        <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">文字の変換</button>
       </div>
       <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
     </div>
@@ -305,40 +300,27 @@
       <div class="mode-desc" id="mode-desc">16-FSK: 1シンボル=4bit、16段階の周波数で符号化。安定性と速度のバランス良し。</div>
     </div>
 
-    <!-- Pipeline Visualization -->
+    <!-- Controls (再生コントロール) -->
     <div class="panel">
-      <h2>変換パイプライン</h2>
-      <div class="pipeline">
-        <span class="pipe-step" id="step-text">テキスト</span>
-        <span class="pipe-arrow">→</span>
-        <span class="pipe-step" id="step-utf8">UTF-8</span>
-        <span class="pipe-arrow">→</span>
-        <span class="pipe-step" id="step-bits">ビット列</span>
-        <span class="pipe-arrow">→</span>
-        <span class="pipe-step" id="step-frame">フレーム化</span>
-        <span class="pipe-arrow">→</span>
-        <span class="pipe-step" id="step-mod">変調</span>
-        <span class="pipe-arrow">→</span>
-        <span class="pipe-step" id="step-audio">音声出力</span>
+      <h2>再生コントロール</h2>
+      <div class="btn-row">
+        <button id="btn-encode" onclick="encode()">エンコード</button>
+        <span id="kanji-status" style="font-size:0.75em;color:#888;">漢字変換: 読込中...</span>
+        <button id="btn-play" onclick="play()" disabled>再生 ▶</button>
+        <button id="btn-stop" onclick="stop()" class="stop" disabled>停止 ■</button>
+        <button id="btn-download" onclick="downloadWav()" class="secondary" disabled>WAVダウンロード</button>
       </div>
-      <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
     </div>
 
-    <!-- Data Inspector -->
-    <div class="panel">
-      <h2>データインスペクタ</h2>
-
-      <label>UTF-8 バイト列 (HEX)</label>
-      <div class="data-display" id="disp-hex"></div>
-
-      <label style="margin-top:6px;">ビット列</label>
-      <div class="data-display" id="disp-bits"></div>
-
-      <label style="margin-top:6px;">フレーム構造</label>
-      <div class="data-display" id="disp-frame"></div>
-
-      <label style="margin-top:6px;">シンボル列</label>
-      <div class="data-display" id="disp-symbols"></div>
+    <!-- Progress Bar -->
+    <div class="panel" style="padding:10px 16px;">
+      <div class="progress-bar" style="margin:0;"><div class="progress-fill" id="progress"></div></div>
+      <span class="pipe-step" id="step-text" style="display:none;"></span>
+      <span class="pipe-step" id="step-utf8" style="display:none;"></span>
+      <span class="pipe-step" id="step-bits" style="display:none;"></span>
+      <span class="pipe-step" id="step-frame" style="display:none;"></span>
+      <span class="pipe-step" id="step-mod" style="display:none;"></span>
+      <span class="pipe-step" id="step-audio" style="display:none;"></span>
     </div>
 
     <!-- Waveform / Spectrum -->
@@ -374,15 +356,24 @@
       <div class="symbol-table" id="symbol-table"></div>
     </div>
 
-    <!-- Controls -->
-    <div class="panel">
-      <h2>再生コントロール</h2>
-      <div class="btn-row">
-        <button id="btn-encode" onclick="encode()">エンコード</button>
-        <span id="kanji-status" style="font-size:0.75em;color:#888;">漢字変換: 読込中...</span>
-        <button id="btn-play" onclick="play()" disabled>再生 ▶</button>
-        <button id="btn-stop" onclick="stop()" class="stop" disabled>停止 ■</button>
-        <button id="btn-download" onclick="downloadWav()" class="secondary" disabled>WAVダウンロード</button>
+    <!-- Data Inspector (collapsible) -->
+    <div class="panel" id="inspector-panel">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>データインスペクタ</span>
+        <button id="btn-inspector-toggle" onclick="toggleInspector()" class="secondary" style="padding:2px 10px;font-size:0.85em;line-height:1.4;">－</button>
+      </h2>
+      <div id="inspector-body">
+        <label>UTF-8 バイト列 (HEX)</label>
+        <div class="data-display" id="disp-hex"></div>
+
+        <label style="margin-top:6px;">ビット列</label>
+        <div class="data-display" id="disp-bits"></div>
+
+        <label style="margin-top:6px;">フレーム構造</label>
+        <div class="data-display" id="disp-frame"></div>
+
+        <label style="margin-top:6px;">シンボル列</label>
+        <div class="data-display" id="disp-symbols"></div>
       </div>
     </div>
 
@@ -521,31 +512,31 @@
             ta.value = kanaToRomajiSimple(ta.value);
           }
           _cycleState = 'romaji';
-          btn.textContent = 'ローマ字→カタカナ';
+          btn.textContent = '文字の変換 (→カタカナ)';
         } else if (_cycleState === 'romaji') {
           // ローマ字 → カタカナ（元文から再変換）
           if (kuroshiroReady) {
             ta.value = await kuroshiroInst.convert(_originalText, { to: 'katakana', mode: 'normal' });
           } else {
             alert('カタカナ変換にはkuroshiro辞書が必要です。');
-            btn.textContent = 'ローマ字→カタカナ';
+            btn.textContent = '文字の変換 (→カタカナ)';
             return;
           }
           _cycleState = 'katakana';
-          btn.textContent = 'カタカナ→元に戻す';
+          btn.textContent = '文字の変換 (→元に戻す)';
         } else {
           // カタカナ → 元文
           ta.value = _originalText;
           _originalText = null;
           _cycleState = 'original';
-          btn.textContent = '漢字→ローマ字';
+          btn.textContent = '文字の変換';
         }
       } catch(e) {
         alert('変換に失敗しました: ' + e.message);
       } finally {
         btn.disabled = false;
         if (_cycleState === 'original' && btn.textContent === '変換中...') {
-          btn.textContent = '漢字→ローマ字';
+          btn.textContent = '文字の変換';
         }
       }
     }
@@ -754,7 +745,6 @@
     // DOM
     // =========================================================================
     const inputText      = document.getElementById('input-text');
-    const csvInput       = document.getElementById('csv-input');
     const dispHex        = document.getElementById('disp-hex');
     const dispBits       = document.getElementById('disp-bits');
     const dispFrame      = document.getElementById('disp-frame');
@@ -933,23 +923,15 @@
     document.getElementById('set-freq-step').addEventListener('input', updateSymbolTable);
 
     // =========================================================================
-    // CSV loading
+    // Data inspector toggle
     // =========================================================================
-    csvInput.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(ev) {
-        inputText.value = ev.target.result;
-      };
-      reader.readAsText(file, 'UTF-8');
-    });
-
-    window.loadDefaultCSV = function() {
-      fetch('a.csv')
-        .then(r => { if (!r.ok) throw new Error('a.csv not found'); return r.text(); })
-        .then(text => { inputText.value = text; })
-        .catch(err => alert('a.csv の読込に失敗: ' + err.message));
+    let _inspectorOpen = true;
+    window.toggleInspector = function() {
+      const body = document.getElementById('inspector-body');
+      const btn  = document.getElementById('btn-inspector-toggle');
+      _inspectorOpen = !_inspectorOpen;
+      body.style.display = _inspectorOpen ? '' : 'none';
+      btn.textContent = _inspectorOpen ? '－' : '＋';
     };
 
     // =========================================================================
