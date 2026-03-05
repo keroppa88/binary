@@ -1520,7 +1520,11 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
-      if (!res.ok) throw new Error(`APIエラー: ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.error?.message ?? res.statusText;
+        throw new Error(`APIエラー ${res.status}: ${msg}`);
+      }
       const data = await res.json();
       const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
       if (!result) throw new Error('変換結果が空です');
