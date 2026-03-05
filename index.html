@@ -285,6 +285,7 @@
           <input type="file" id="csv-input" accept=".csv,.txt">
         </div>
         <button onclick="loadDefaultCSV()" class="secondary">a.csv を読込</button>
+        <button id="btn-to-romaji" onclick="convertToRomaji()" class="secondary">カナ→ローマ字</button>
       </div>
       <textarea id="input-text">祇園精舍の鐘の声、諸行無常の響きあり。娑羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
     </div>
@@ -412,6 +413,28 @@
         if (statusEl) { statusEl.textContent = '漢字変換: エラー（かな入力のみ）'; statusEl.style.color = '#e63946'; }
       }
     })();
+
+    // =========================================================================
+    // カナ→ローマ字変換
+    // =========================================================================
+    async function convertToRomaji() {
+      if (!kuroshiroReady) {
+        alert('漢字変換ライブラリの読込中です。しばらくお待ちください。');
+        return;
+      }
+      const ta = document.getElementById('input-text');
+      const btn = document.getElementById('btn-to-romaji');
+      btn.disabled = true;
+      btn.textContent = '変換中...';
+      try {
+        ta.value = await kuroshiroInst.convert(ta.value, { to: 'romaji', mode: 'spaced', romajiSystem: 'hepburn' });
+      } catch(e) {
+        alert('ローマ字変換に失敗しました: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'カナ→ローマ字';
+      }
+    }
 
     // =========================================================================
     // Configuration
