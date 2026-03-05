@@ -281,7 +281,7 @@
       <h2>入力テキスト</h2>
       <div class="btn-row" style="margin-bottom:8px;">
         <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">文字の変換</button>
-        <button id="btn-reset-text" onclick="resetText()" class="secondary">文章リセット</button>
+        <button id="btn-reset-text" onclick="resetText()" class="secondary">リセット</button>
       </div>
       <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
     </div>
@@ -391,7 +391,6 @@
     let kuroshiroFailed = false;
 
     const kuroshiroInitPromise = (async function initKuroshiro() {
-      const statusEl = document.getElementById('kanji-status');
       try {
         const KuroshiroCls = (typeof Kuroshiro === 'function') ? Kuroshiro : Kuroshiro.default;
         const k = new KuroshiroCls();
@@ -400,12 +399,9 @@
         }));
         kuroshiroInst = k;
         kuroshiroReady = true;
-        if (statusEl) { statusEl.textContent = '漢字変換: OK'; statusEl.style.color = '#4caf50'; }
       } catch(e) {
         kuroshiroFailed = true;
         console.warn('kuroshiro init failed:', e);
-        const msg = e && (e.message || String(e));
-        if (statusEl) { statusEl.textContent = '漢字変換: エラー → ' + msg; statusEl.style.color = '#e63946'; }
       }
     })();
 
@@ -543,44 +539,6 @@
     window.cycleKanaRomaji = cycleKanaRomaji;
 
     function resetText() {
-      // Stop any active playback
-      if (isPlaying && sourceNode) {
-        sourceNode.stop();
-        isPlaying = false;
-      }
-      if (audioCtx) {
-        audioCtx.close();
-        audioCtx = null;
-      }
-
-      // Clear audio state
-      audioBuffer = null;
-      sourceNode = null;
-      gainNode = null;
-      analyser = null;
-
-      // Reset UI controls
-      btnPlay.disabled = true;
-      btnStop.disabled = true;
-      btnDownload.disabled = true;
-      progress.style.width = '0%';
-
-      // Clear pipeline steps
-      Object.values(steps).forEach(s => {
-        s.className = 'pipe-step';
-        s.style.display = 'none';
-      });
-
-      // Clear data displays
-      dispHex.textContent = '';
-      dispBits.textContent = '';
-      dispFrame.textContent = '';
-      dispSymbols.innerHTML = '';
-
-      // Clear waveform canvas
-      drawWaveform();
-
-      // Reset text input and cycle state
       const ta = document.getElementById('input-text');
       ta.value = '';
       _originalText = null;
