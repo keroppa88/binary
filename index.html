@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>テキスト→音声変調</title>
+  <title>binary</title>
   <script src="vendor/kuroshiro.min.js"></script>
   <script src="vendor/kuroshiro-analyzer-kuromoji.min.js"></script>
 
@@ -272,7 +272,7 @@
 </head>
 <body>
   <h1>TEXT → AUDIO MODULATOR</h1>
-  <p class="subtitle" id="subtitle">FSK テキスト音声変調器</p>
+  <p class="subtitle" id="subtitle" style="display:none;"></p>
 
   <div class="container">
 
@@ -565,7 +565,7 @@
       fsk8:  { bits: 8,  symbols: 256,   label: '256-FSK (8bit)',   desc: '256-FSK: 1シンボル=8bit、256段階の周波数。高速だが環境依存。',
                recommended: { baseFreq: 500, freqStep: 30,  symbolDur: 50 } },
       fsk16: { bits: 16, symbols: 65536, label: '65536-FSK (16bit)', desc: '65536-FSK: 1シンボル=16bit、65536段階の周波数。超高速だが実用性は限定的。',
-               recommended: { baseFreq: 500, freqStep: 15,  symbolDur: 50 } },
+               recommended: { baseFreq: 500, freqStep: 30,  symbolDur: 50 } },
       morse: { bits: 0,  symbols: 0,     label: 'モールス信号',      desc: 'モールス信号: 短点(・)と長点(-)で文字を符号化。古典的な通信方式。※英数字(A-Z, 0-9)と一部記号のみ対応。日本語は変換できません。',
                recommended: { baseFreq: 500, freqStep: 50,  symbolDur: 50 } },
       morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。漢字はkuroshiroで自動かな変換。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。数字0-9は国際モールス符号で対応。',
