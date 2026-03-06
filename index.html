@@ -336,11 +336,11 @@
       <div class="settings-grid">
         <div class="setting-item">
           <label>ベース周波数 (Hz)</label>
-          <input type="number" id="set-base-freq" value="800" min="200" max="4000" step="50">
+          <input type="number" id="set-base-freq" value="500" min="200" max="4000" step="50">
         </div>
         <div class="setting-item">
           <label>周波数間隔 (Hz)</label>
-          <input type="number" id="set-freq-step" value="150" min="50" max="500" step="10">
+          <input type="number" id="set-freq-step" value="100" min="1" max="500" step="1">
         </div>
         <div class="setting-item">
           <label>シンボル長 (ms)</label>
@@ -559,19 +559,19 @@
 
     const MODE_INFO = {
       fsk2:  { bits: 2,  symbols: 4,     label: '4-FSK (2bit)',     desc: '4-FSK: 1シンボル=2bit、4段階の周波数。超安定だが遅い。',
-               recommended: { baseFreq: 800, freqStep: 300, symbolDur: 100 } },
+               recommended: { baseFreq: 500, freqStep: 200, symbolDur: 50 } },
       fsk4:  { bits: 4,  symbols: 16,    label: '16-FSK (4bit)',    desc: '16-FSK: 1シンボル=4bit、16段階の周波数。安定性と速度のバランス良し。',
-               recommended: { baseFreq: 800, freqStep: 150, symbolDur: 50 } },
+               recommended: { baseFreq: 500, freqStep: 100, symbolDur: 50 } },
       fsk8:  { bits: 8,  symbols: 256,   label: '256-FSK (8bit)',   desc: '256-FSK: 1シンボル=8bit、256段階の周波数。高速だが環境依存。',
-               recommended: { baseFreq: 200, freqStep: 50,  symbolDur: 30 } },
+               recommended: { baseFreq: 500, freqStep: 30,  symbolDur: 50 } },
       fsk16: { bits: 16, symbols: 65536, label: '65536-FSK (16bit)', desc: '65536-FSK: 1シンボル=16bit、65536段階の周波数。超高速だが実用性は限定的。',
-               recommended: { baseFreq: 200, freqStep: 50,  symbolDur: 20 } },
+               recommended: { baseFreq: 500, freqStep: 15,  symbolDur: 50 } },
       morse: { bits: 0,  symbols: 0,     label: 'モールス信号',      desc: 'モールス信号: 短点(・)と長点(-)で文字を符号化。古典的な通信方式。※英数字(A-Z, 0-9)と一部記号のみ対応。日本語は変換できません。',
-               recommended: { baseFreq: 800, freqStep: 150, symbolDur: 80 } },
+               recommended: { baseFreq: 500, freqStep: 50,  symbolDur: 50 } },
       morse_kana: { bits: 0, symbols: 0, label: '和文モールス',      desc: '和文モールス信号: 短点(・)と長点(-)でカナ文字を符号化。漢字はkuroshiroで自動かな変換。濁音は清音＋濁点(・・)、半濁音は清音＋半濁点(・・−−・)で表現。数字0-9は国際モールス符号で対応。',
-               recommended: { baseFreq: 800, freqStep: 150, symbolDur: 80 } },
+               recommended: { baseFreq: 500, freqStep: 50,  symbolDur: 50 } },
       phone: { bits: 0,  symbols: 16,    label: 'ポケベル式 DTMF',  desc: 'ポケベル式: 4×4 DTMF和音(16種)でかな・英字・数字を符号化。漢字はkuroshiroで自動かな変換。2つの和音で1文字を表現。行(第1和音)+段(第2和音)。英字A-Z・数字0-9にも対応。',
-               recommended: { baseFreq: 800, freqStep: 150, symbolDur: 80 } },
+               recommended: { baseFreq: 500, freqStep: 50,  symbolDur: 50 } },
     };
 
     // =========================================================================
@@ -814,7 +814,6 @@
       btn.classList.add('active');
       const info = MODE_INFO[mode];
       modeDesc.textContent = info.desc;
-      subtitle.textContent = info.label + ' テキスト音声変調器';
       applyRecommendedSettings(mode);
       updateSymbolTable();
     });
