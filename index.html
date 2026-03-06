@@ -283,7 +283,7 @@
         <button id="btn-cycle-kana" onclick="cycleKanaRomaji()" class="secondary">文字の変換</button>
         <button id="btn-reset-text" onclick="resetText()" class="secondary">リセット</button>
       </div>
-      <textarea id="input-text">祇園精舎の鐘の声、諸行無常の響きあり。沙羅双樹の花の色、盛者必衰の理をあらはす。驕れる人も久しからず、ただ春の夜の夢のごとし。猛き者もつひにはほろびぬ、ひとへに風の前の塵に同じ。</textarea>
+      <textarea id="input-text">ゆく河の流れは絶えずして、しかももとの水にあらず。よどみに浮ぶうたかたは、かつ消えかつ結びて、久しくとどまりたるためしなし。世の中にある人とすみかと、又かくのごとし。</textarea>
     </div>
 
     <!-- Modulation Mode -->
@@ -295,7 +295,7 @@
         <button class="mode-btn" data-mode="fsk8">8bit (256-FSK)</button>
         <button class="mode-btn" data-mode="fsk16">16bit (65536-FSK)</button>
         <button class="mode-btn" data-mode="morse">モールス信号（英数字）</button>
-        <button class="mode-btn" data-mode="morse_kana">和文モールス（カナ）</button>
+        <button class="mode-btn" data-mode="morse_kana">和文モールス信号（カナ）</button>
         <button class="mode-btn" data-mode="phone">ポケベル式 (4×4 DTMF)</button>
       </div>
       <div class="mode-desc" id="mode-desc">16-FSK: 1シンボル=4bit、16段階の周波数で符号化。安定性と速度のバランス良し。</div>
@@ -508,18 +508,15 @@
             ta.value = kanaToRomajiSimple(ta.value);
           }
           _cycleState = 'romaji';
-          btn.textContent = '文字の変換 (→カタカナ)';
         } else if (_cycleState === 'romaji') {
           // ローマ字 → カタカナ（元文から再変換）
           if (kuroshiroReady) {
             ta.value = await kuroshiroInst.convert(_originalText, { to: 'katakana', mode: 'normal' });
           } else {
             alert('カタカナ変換にはkuroshiro辞書が必要です。');
-            btn.textContent = '文字の変換 (→カタカナ)';
             return;
           }
           _cycleState = 'katakana';
-          btn.textContent = '文字の変換 (→元に戻す)';
         } else {
           // カタカナ → 元文
           ta.value = _originalText;
